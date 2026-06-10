@@ -23,6 +23,10 @@ import { PredictIndexerClient } from '../src/indexer/client.js';
 import { OracleCache } from '../src/indexer/oracleCache.js';
 import type { OracleRow } from '../src/indexer/types.js';
 import { PredictService, type MarketParams } from '../src/chain/predictService.js';
+import { FileLedgerStore } from '../src/trading/ledgerStore.js';
+import { MockTradingService } from '../src/trading/mock.js';
+import { RealTradingService } from '../src/trading/real.js';
+import type { TradingPort } from '../src/trading/types.js';
 import {
   dusdcToUnits,
   fixedToUsd,
@@ -87,6 +91,20 @@ function requireFlag(args: Args, name: string): string {
     throw new Error(`missing required flag --${name}`);
   }
   return value;
+}
+
+const MOCK_FUNDS = process.env.MOCK_FUNDS === '1';
+
+function tradingPort(keypair: Ed25519Keypair, managerId: string): TradingPort {
+  const address = keypair.getPublicKey().toSuiAddress();
+  if (MOCK_FUNDS) {
+    const dir = path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      '../../../.cache/mock-ledger',
+    );
+    return new MockTradingService(address, new FileLedgerStore(dir), service, indexer);
+  }
+  return new RealTradingService(client, cfg, service, indexer, keypair, managerId);
 }
 
 const fmtUsd = (n: number) => n.toLocaleString('en-US', { maximumFractionDigits: 2 });
@@ -196,6 +214,11 @@ async function cmdWallet(args: Args) {
     const managerBalance = await service.getManagerBalance(managerId);
     console.log(`manager ${managerId}\n        balance ${fmtDusdc(managerBalance)}`);
   }
+  if (MOCK_FUNDS) {
+    const { keypair } = loadOrCreateKeypair();
+    const port = tradingPort(keypair, 'mock');
+    console.log(`mock    ${fmtDusdc(await port.getBalance())} [MOCK_FUNDS=1]`);
+  }
 }
 
 async function cmdStatus() {
@@ -252,104 +275,98 @@ async function cmdBet(args: Args) {
   if (side !== 'up' && side !== 'down') throw new Error('--side must be up or down');
   const stake = Number(requireFlag(args, 'stake'));
   const { keypair, address } = await getWallet();
-  const managerId = await ensureManager(keypair, address);
+  const managerId = MOCK_FUNDS ? 'mock' : await ensureManager(keypair, address);
+  const port = tradingPort(keypair, managerId);
   const oracle = await pickOracle(args);
   const { market, spotUsd } = await atmMarket(oracle, side === 'up');
 
-  // protocol-priced sizing: stake (premium) → notional quantity at current ask
-  const probe = 1_000_000n;
-  const { mintCost: unitCost } = await service.getTradeAmounts(market, probe);
-  const ask = (unitCost * 1_000_000_000n) / probe;
-  const quantity =
-    args.flags.has('quantity')
-      ? BigInt(requireFlag(args, 'quantity'))
-      : stakeToQuantity(dusdcToUnits(stake), ask);
-  const cost = calcMintCost(ask, quantity);
+  console.log(
+    `betting ${side.toUpperCase()} on ${oracle.underlying_asset} @ strike $${fmtUsd(fixedToUsd(market.strike))} (spot $${fmtUsd(spotUsd)})${port.mode === 'mock' ? '  [MOCK FUNDS]' : ''}`,
+  );
+  const receipt = await port.placeBet({ market, stakeUnits: dusdcToUnits(stake) });
+  const p = receipt.position;
+  console.log(`✓ position ${p.id}${receipt.txDigest ? `  tx ${receipt.txDigest}` : ''}`);
+  console.log(`  paid ${fmtDusdc(p.costUnits)} at ask ${(Number(p.askPrice) / 1e9).toFixed(4)} for ${fmtDusdc(p.quantityUnits)} notional`);
+  console.log(`  wins ${fmtDusdc(p.quantityUnits)} if BTC ${p.market.isUp ? '>' : '≤'} $${fmtUsd(fixedToUsd(p.market.strike))} at ${new Date(Number(p.market.expiry)).toISOString()}`);
+  console.log(`  balance ${fmtDusdc(receipt.balanceUnits)}`);
+}
 
-  console.log(`betting ${side.toUpperCase()} on ${oracle.underlying_asset} @ strike $${fmtUsd(fixedToUsd(market.strike))} (spot $${fmtUsd(spotUsd)})`);
-  console.log(`        notional ${fmtDusdc(quantity)}, est. cost ${fmtDusdc(cost)} (ask ${(Number(ask) / 1e9).toFixed(4)})`);
-
-  // top up the manager only for what's missing; 2% buffer absorbs ask drift
-  const managerBalance = await service.getManagerBalance(managerId);
-  const required = (cost * 102n) / 100n;
-  const depositUnits = required > managerBalance ? required - managerBalance : 0n;
-
-  const tx =
-    depositUnits > 0n
-      ? await service.buildDepositTx({
-          owner: address,
-          managerId,
-          amountUnits: depositUnits,
-          mint: { ...market, quantity },
-        })
-      : service.buildMintTx({ managerId, market, quantity });
-
-  if (depositUnits > 0n) console.log(`        depositing ${fmtDusdc(depositUnits)} into manager in the same PTB`);
-  const result = await execute(keypair, tx);
-  const minted = service.extractPositionMinted(result);
-  console.log(`✓ minted  tx ${result.digest}`);
-  if (minted) {
-    console.log(`  paid ${fmtDusdc(minted.cost)} at ask ${(Number(minted.askPrice) / 1e9).toFixed(4)} for ${fmtDusdc(minted.quantity)} notional`);
-    console.log(`  wins ${fmtDusdc(minted.quantity)} if BTC ${minted.isUp ? '>' : '≤'} $${fmtUsd(fixedToUsd(minted.strike))} at ${new Date(Number(minted.expiry)).toISOString()}`);
+async function cmdAirdrop(args: Args) {
+  const amount = Number(args.flags.get('amount') ?? 100);
+  const { keypair } = await getWallet();
+  if (!MOCK_FUNDS) {
+    throw new Error('airdrop is mock-only from the CLI; real airdrops run via the ops wallet service');
   }
+  const port = tradingPort(keypair, 'mock');
+  await port.airdrop(dusdcToUnits(amount));
+  console.log(`✓ +${amount.toFixed(2)} dUSDC [MOCK] — balance ${fmtDusdc(await port.getBalance())}`);
 }
 
 async function cmdPositions() {
-  const managerId = loadManagerId();
+  const { keypair } = await getWallet();
+  const managerId = MOCK_FUNDS ? 'mock' : loadManagerId();
   if (!managerId) throw new Error('no manager yet — run `pnpm cli setup`');
-  const minted = await indexer.positionsMinted({ manager_id: managerId, limit: 50 });
-  if (minted.length === 0) {
-    console.log('no positions minted yet');
+  const port = tradingPort(keypair, managerId);
+  const positions = await port.listPositions();
+  if (positions.length === 0) {
+    console.log('no positions yet');
     return;
   }
-  console.log(`minted positions for manager ${short(managerId)} (on-chain quantity may differ after redeems):`);
-  for (const p of minted) {
-    const market: MarketParams = {
-      oracleId: p.oracle_id,
-      expiry: BigInt(p.expiry),
-      strike: BigInt(p.strike),
-      isUp: p.is_up,
-    };
-    const held = await service.getPositionQuantity(managerId, market).catch(() => null);
+  console.log(`positions${port.mode === 'mock' ? ' [MOCK FUNDS]' : ` for manager ${short(managerId)}`}:`);
+  for (const p of positions) {
+    const result =
+      p.status === 'open'
+        ? `open`
+        : `${p.status}${p.payoutUnits !== undefined ? ` → ${fmtDusdc(p.payoutUnits)}` : ''}`;
     console.log(
-      `  ${p.is_up ? 'UP  ' : 'DOWN'} strike $${fmtUsd(fixedToUsd(BigInt(p.strike)))}  expiry ${new Date(Number(p.expiry)).toISOString()}  minted ${fmtDusdc(BigInt(p.quantity))}  held ${held === null ? '?' : fmtDusdc(held)}  oracle ${short(p.oracle_id)}`,
+      `  ${p.market.isUp ? 'UP  ' : 'DOWN'} strike $${fmtUsd(fixedToUsd(p.market.strike))}  expiry ${new Date(Number(p.market.expiry)).toISOString()}  notional ${fmtDusdc(p.quantityUnits)}  cost ${fmtDusdc(p.costUnits)}  ${result}`,
     );
+    console.log(`       id ${p.id}`);
   }
 }
 
 async function cmdCashout(args: Args) {
-  const side = requireFlag(args, 'side');
-  const strikeUsd = Number(requireFlag(args, 'strike'));
-  const oracleId = requireFlag(args, 'oracle');
   const { keypair } = await getWallet();
-  const managerId = loadManagerId();
+  const managerId = MOCK_FUNDS ? 'mock' : loadManagerId();
   if (!managerId) throw new Error('no manager yet — run `pnpm cli setup`');
+  const port = tradingPort(keypair, managerId);
 
-  const { oracle } = await indexer.oracleState(oracleId);
-
-  const market: MarketParams = {
-    oracleId,
-    expiry: BigInt(oracle.expiry),
-    strike: usdToFixed(strikeUsd),
-    isUp: side === 'up',
-  };
-  const held = await service.getPositionQuantity(managerId, market);
-  if (held === 0n) throw new Error('no quantity held for that market key');
-  const quantity = args.flags.has('quantity') ? BigInt(requireFlag(args, 'quantity')) : held;
-
-  const { redeemPayout } = await service.getTradeAmounts(market, quantity);
-  console.log(`cashing out ${fmtDusdc(quantity)} notional → est. ${fmtDusdc(redeemPayout)}`);
-  const result = await execute(keypair, service.buildRedeemTx({ managerId, market, quantity }));
-  const redeemed = service.extractPositionRedeemed(result);
-  console.log(`✓ redeemed  tx ${result.digest}`);
-  for (const r of redeemed) {
-    console.log(`  payout ${fmtDusdc(r.payout)} at bid ${(Number(r.bidPrice) / 1e9).toFixed(4)} (settled: ${r.isSettled})`);
+  let positionId = args.flags.get('id');
+  if (typeof positionId !== 'string') {
+    const side = requireFlag(args, 'side');
+    const strikeUsd = Number(requireFlag(args, 'strike'));
+    const oracleId = requireFlag(args, 'oracle');
+    const prefix = `${oracleId}:${usdToFixed(strikeUsd)}:${side}`;
+    const match = (await port.listPositions()).find(
+      (p) => p.status === 'open' && p.id.startsWith(prefix),
+    );
+    if (!match) throw new Error(`no open position matching ${prefix}`);
+    positionId = match.id;
   }
+
+  const receipt = await port.cashOut(positionId);
+  console.log(`✓ cashed out ${positionId}${receipt.txDigest ? `  tx ${receipt.txDigest}` : ''}`);
+  console.log(`  payout ${fmtDusdc(receipt.payoutUnits)} — balance ${fmtDusdc(receipt.balanceUnits)}`);
 }
 
 /** Keeper primitive: redeem every settled-but-unclaimed position of our manager. */
 async function cmdRedeemSettled() {
   const { keypair } = await getWallet();
+  if (MOCK_FUNDS) {
+    const port = tradingPort(keypair, 'mock');
+    const events = await port.settle();
+    if (events.length === 0) {
+      console.log('nothing to settle [MOCK]');
+      return;
+    }
+    for (const e of events) {
+      console.log(
+        `  ${e.won ? '✓ WON ' : '✗ LOST'} ${e.position.id} — settle $${fmtUsd(fixedToUsd(e.settlementPrice))} vs strike $${fmtUsd(fixedToUsd(e.position.market.strike))} → ${fmtDusdc(e.payoutUnits)}`,
+      );
+    }
+    console.log(`balance ${fmtDusdc(await port.getBalance())}`);
+    return;
+  }
   const managerId = loadManagerId();
   if (!managerId) throw new Error('no manager yet — run `pnpm cli setup`');
 
@@ -428,6 +445,7 @@ const COMMANDS: Record<string, (args: Args) => Promise<void>> = {
   status: () => cmdStatus(),
   quote: cmdQuote,
   setup: () => cmdSetup(),
+  airdrop: cmdAirdrop,
   bet: cmdBet,
   positions: () => cmdPositions(),
   cashout: cmdCashout,
@@ -438,7 +456,7 @@ const COMMANDS: Record<string, (args: Args) => Promise<void>> = {
 const args = parseArgs(process.argv.slice(2));
 const handler = COMMANDS[args.command];
 if (!handler) {
-  console.log('commands: wallet [--faucet] · status · quote · setup · bet · positions · cashout · redeem-settled · roundtrip');
+  console.log('commands: wallet [--faucet] · status · quote · setup · airdrop · bet · positions · cashout · redeem-settled · roundtrip  (MOCK_FUNDS=1 for mock custody)');
   process.exit(args.command === 'help' ? 0 : 1);
 }
 handler(args).catch((err) => {
