@@ -5,6 +5,7 @@ import { api, type PublicSession } from '@/lib/api';
 import type { MarketSnapshot, QuoteResponse } from '@/lib/server/market';
 import { fixedToUsdNum, fmtDusdcUnits, fmtUsd, shortAddr } from '@/lib/format';
 import { ChunkyButton } from './ChunkyButton';
+import { LeftRail, RightRail } from './DesktopRails';
 import { ExpiryChips } from './ExpiryChips';
 import { LivePrice } from './LivePrice';
 import { Onboarding } from './Onboarding';
@@ -279,7 +280,9 @@ export function PlayScreen() {
   const delta = points.length >= 2 ? points[points.length - 1]! - points[Math.max(0, points.length - 30)]! : 0;
 
   return (
-    <div className="relative mx-auto flex min-h-dvh w-full max-w-md flex-col gap-3 px-4 pb-28 pt-4">
+    <div className="relative mx-auto lg:grid lg:max-w-[1280px] lg:grid-cols-[290px_minmax(0,1fr)_310px] lg:items-start lg:gap-5 lg:px-6 lg:pt-5">
+      <LeftRail positions={positions} spotUsd={spotUsd} onCashOut={cashOut} />
+      <div className="relative mx-auto flex min-h-dvh w-full max-w-md flex-col gap-3 px-4 pb-28 pt-4 lg:min-h-0 lg:max-w-none lg:px-0 lg:pb-8 lg:pt-0">
       {/* header */}
       <header className="flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -473,9 +476,9 @@ export function PlayScreen() {
         )}
       </section>
 
-      {/* open calls */}
+      {/* open calls (mobile; desktop shows them in the left rail) */}
       {openPositions.length > 0 && (
-        <section className="flex flex-col gap-2.5">
+        <section className="flex flex-col gap-2.5 lg:hidden">
           <h2 className="px-1 text-[10px] font-black tracking-[0.14em] text-muted">OPEN CALLS</h2>
           {openPositions.map((p) => (
             <OpenCallCard key={p.id} position={p} spotUsd={spotUsd} onCashOut={cashOut} />
@@ -492,6 +495,8 @@ export function PlayScreen() {
       {/* overlays */}
       {result && <ResultOverlay result={result} onClose={() => setResult(null)} />}
       {session === null && <Onboarding onClaim={claim} />}
+      </div>
+      <RightRail streak={streak} />
     </div>
   );
 }

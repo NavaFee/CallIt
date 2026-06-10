@@ -31,13 +31,15 @@ test('register → bet → cash out → leaderboard', async ({ page }) => {
   await page.getByTestId('call-up').click();
   await page.getByTestId('stake-5').click();
   await page.getByTestId('lock-button').click();
-  await expect(page.getByTestId('open-call')).toBeVisible({ timeout: 60_000 });
+  // open-call renders in both the mobile section and the desktop rail (DOM-hidden)
+  const openCall = page.getByTestId('open-call').locator('visible=true').first();
+  await expect(openCall).toBeVisible({ timeout: 60_000 });
   const afterBet = await balanceOf(page);
   expect(afterBet).toBeLessThan(100);
   expect(afterBet).toBeGreaterThanOrEqual(95);
 
   // ── hold-to-confirm cash out at the live bid ─────────────────────
-  const cashout = page.getByTestId('cashout-button');
+  const cashout = page.getByTestId('cashout-button').locator('visible=true').first();
   const box = (await cashout.boundingBox())!;
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down();

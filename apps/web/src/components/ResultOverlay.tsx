@@ -43,7 +43,7 @@ export function ResultOverlay({ result, onClose }: { result: ResultData; onClose
 
   return (
     <div
-      className="absolute inset-0 z-[45] flex flex-col items-center justify-center overflow-hidden px-6 text-center"
+      className="fixed inset-0 z-[45] flex flex-col items-center justify-center overflow-hidden px-6 text-center"
       style={{
         background:
           kind === 'won'

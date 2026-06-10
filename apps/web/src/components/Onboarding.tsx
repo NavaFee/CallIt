@@ -13,7 +13,7 @@ export function Onboarding({ onClaim }: { onClaim: () => Promise<void> }) {
 
   return (
     <div
-      className="absolute inset-0 z-[60] flex flex-col items-center justify-center px-8 text-center"
+      className="fixed inset-0 z-[60] flex flex-col items-center justify-center px-8 text-center"
       style={{ background: 'radial-gradient(circle at 50% 22%, #131A2C, var(--bg-page) 70%)' }}
       data-testid="onboarding"
     >

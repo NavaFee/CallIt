@@ -4,7 +4,9 @@ A gamified BTC prediction app built on [DeepBook Predict](https://github.com/Mys
 
 Pick UP or DOWN on BTC, stake dUSDC, and get paid automatically when the oracle settles — no wallet extension, no seed phrase, no gas popups. Odds are priced by the protocol's live SVI volatility surface; a keeper claims payouts for you the moment the oracle settles.
 
-🌐 [callit.markets](https://callit.markets) · Sui testnet
+🌐 Live now: **[callit-seven.vercel.app](https://callit-seven.vercel.app)** (→ callit.markets) · Sui testnet
+
+Landing page at [/welcome](https://callit-seven.vercel.app/welcome) · mobile-first PWA + ≥1024px desktop HUD
 
 ## Architecture
 
@@ -46,6 +48,19 @@ cp .env.example .env        # testnet defaults are pre-filled
 pnpm --filter @callit/core test
 ```
 
+### Web app
+
+```bash
+docker compose up -d                  # Postgres for streaks/leaderboard (optional)
+pnpm --filter @callit/db push         # create tables
+MOCK_FUNDS=1 pnpm --filter @callit/web dev
+```
+
+`MOCK_FUNDS=1` simulates custody only — every price, quote and settlement
+result on screen is live DeepBook Predict testnet data. Remove the env var
+(and fund the ops wallet) to switch to real on-chain custody with zero code
+changes; the `TradingPort` interface is the seam.
+
 ### CLI (full on-chain round trip)
 
 ```bash
@@ -76,7 +91,7 @@ pnpm --filter @callit/core codegen   # regenerates packages/core/src/generated f
 | Unit | Vitest | scaling/odds math, strike grid, oracle health fuse, streak machine |
 | Chain integration | Vitest (`RUN_CHAIN_TESTS=1`) | real testnet mint → position read → redeem |
 | Bot | grammY `handleUpdate` | notification rendering without Telegram servers |
-| E2E | Playwright | login → airdrop → bet → cash out → leaderboard |
+| E2E | Playwright | register → airdrop → bet → hold-to-cash-out → leaderboard/profile |
 | Fault injection | Vitest | indexer timeout, stale oracle → betting disabled (fuse) |
 
 ## Safety rails
