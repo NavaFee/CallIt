@@ -1,0 +1,17 @@
+{
+  "name": "@callit/worker",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "CallIt keeper (OracleSettled → redeem_permissionless) and Telegram notify bot",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "echo 'no tests yet'"
+  },
+  "dependencies": {
+    "@callit/core": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0"
+  }
+}

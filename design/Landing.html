@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"></meta>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"></meta>
+<title>CallIt — Call the market. Win the pot.</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"></link>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"></link>
+<link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@600;700;800;900;1000&display=swap" rel="stylesheet"></link>
+<style>
+  :root {
+    --bg: #07090F;
+    --bg-2: #0B0E16;
+    --card: #141927;
+    --card-2: #1A2133;
+    --line: rgba(255,255,255,0.07);
+    --text: #F2F5FF;
+    --muted: #8B93AC;
+    --up: #00E07B; --up-hi: #5FFFB0; --up-edge: #067A45; --up-glow: rgba(0,224,123,0.35);
+    --down: #FF3D5E; --down-hi: #FF8DA1; --down-edge: #9E1430; --down-glow: rgba(255,61,94,0.35);
+    --gold: #FFC53D; --gold-deep: #B97E0A;
+    --sui: #4DA2FF;
+    --display: 'Lilita One', system-ui, sans-serif;
+    --ui: 'Nunito', system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--ui);
+    overflow-x: hidden;
+  }
+  a { color: inherit; text-decoration: none; }
+  .display { font-family: var(--display); font-weight: 400; letter-spacing: 0.02em; }
+  .num { font-variant-numeric: tabular-nums; }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 28px; }
+
+  @keyframes lp-glow { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+  @keyframes lp-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
+  @keyframes lp-shimmer { from { transform: translateX(-120%) skewX(-18deg); } to { transform: translateX(260%) skewX(-18deg); } }
+  @keyframes lp-tick-up { 0% { color: var(--up); } 100% { color: var(--text); } }
+  @keyframes lp-tick-down { 0% { color: var(--down); } 100% { color: var(--text); } }
+  @keyframes lp-flame { 0%, 100% { transform: rotate(45deg) scale(1); } 50% { transform: rotate(46deg) scale(0.93, 1.08); } }
+
+  /* chunky buttons */
+  .chunky {
+    display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+    font-family: var(--display); font-size: 20px; letter-spacing: 0.04em;
+    border: none; cursor: pointer; border-radius: 18px;
+    padding: 0 34px; height: 62px; color: #3A2700;
+    background: linear-gradient(180deg, #FFE08A 0%, var(--gold) 42%);
+    box-shadow: 0 7px 0 var(--gold-deep), 0 14px 34px rgba(255,197,61,0.3);
+    transition: transform 0.07s ease, box-shadow 0.07s ease, filter 0.15s ease;
+    user-select: none; white-space: nowrap;
+  }
+  .chunky:hover { filter: brightness(1.07); }
+  .chunky:active { transform: translateY(6px) scale(0.985); box-shadow: 0 1px 0 var(--gold-deep); }
+  .chunky.dim {
+    color: var(--text); font-family: var(--ui); font-weight: 900; font-size: 15px;
+    background: linear-gradient(180deg, #222B42, #1A2133);
+    box-shadow: 0 6px 0 #0B0E18;
+  }
+  .chunky.dim:active { box-shadow: 0 1px 0 #0B0E18; transform: translateY(5px) scale(0.99); }
+
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: rgba(255,255,255,0.05); border: 1px solid var(--line);
+    border-radius: 999px; padding: 6px 14px;
+    font-weight: 900; font-size: 14px; position: relative; overflow: hidden;
+  }
+  .pill .shine { position: absolute; top: 0; bottom: 0; width: 45%; left: 0; pointer-events: none;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.22), transparent); opacity: 0; }
+  .pill.flash .shine { animation: lp-shimmer 0.9s ease-out; opacity: 1; }
+
+  /* ── nav ── */
+  .nav { position: sticky; top: 0; z-index: 50;
+    background: rgba(7,9,15,0.8); backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--line); }
+  .nav-in { display: flex; align-items: center; justify-content: space-between; height: 68px; }
+  .logo { display: flex; align-items: center; gap: 9px; font-family: var(--display); font-size: 26px; }
+  .logo .coin {
+    width: 32px; height: 32px; border-radius: 999px; display: flex; align-items: center; justify-content: center;
+    font-size: 15px; color: #5B3D00;
+    background: radial-gradient(circle at 32% 28%, #FFE08A, var(--gold) 55%, #D89B12);
+    box-shadow: inset 0 -2px 0 var(--gold-deep), inset 0 2px 0 #FFEDB3;
+    border: 2px solid #E9A718;
+  }
+  .nav .chunky { height: 44px; font-size: 16px; padding: 0 22px; box-shadow: 0 5px 0 var(--gold-deep); }
+  .nav .chunky:active { transform: translateY(4px); box-shadow: 0 1px 0 var(--gold-deep); }
+
+  /* ── hero ── */
+  .hero { position: relative; padding: 84px 0 60px; overflow: hidden; }
+  .hero::before {
+    content: ''; position: absolute; inset: -200px 0 auto; height: 700px; pointer-events: none;
+    background: radial-gradient(700px circle at 30% 20%, rgba(77,162,255,0.13), transparent 70%),
+                radial-gradient(600px circle at 78% 45%, rgba(0,224,123,0.1), transparent 70%);
+  }
+  .hero-grid { position: relative; display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 48px; align-items: center; }
+  .hero h1 { font-family: var(--display); font-weight: 400; font-size: 74px; line-height: 0.98; margin: 18px 0 0; letter-spacing: 0.01em; }
+  .hero h1 .gold { color: var(--gold); text-shadow: 0 0 38px rgba(255,197,61,0.35); }
+  .hero .sub { font-size: 19px; font-weight: 700; color: var(--muted); line-height: 1.55; margin: 22px 0 0; max-width: 480px; text-wrap: pretty; }
+  .hero .sub b { color: var(--text); }
+  .eyebrow { display: inline-flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 900; letter-spacing: 0.14em;
+    color: var(--sui); background: rgba(77,162,255,0.1); border: 1px solid rgba(77,162,255,0.3);
+    border-radius: 999px; padding: 7px 14px; }
+  .hero-ctas { display: flex; align-items: center; gap: 14px; margin-top: 34px; flex-wrap: wrap; }
+  .hero-fine { margin-top: 16px; font-size: 12.5px; font-weight: 800; color: var(--muted); }
+
+  /* ── phone mock ── */
+  .phone-col { display: flex; justify-content: center; }
+  .phone {
+    width: 330px; border-radius: 52px; padding: 12px;
+    background: linear-gradient(180deg, #232B42, #11151F);
+    border: 1px solid rgba(255,255,255,0.12);
+    box-shadow: 0 40px 90px rgba(0,0,0,0.65), 0 0 80px rgba(0,224,123,0.08);
+    animation: lp-float 7s ease-in-out infinite;
+  }
+  .phone-screen {
+    border-radius: 41px; overflow: hidden; position: relative;
+    background: radial-gradient(circle at 50% -10%, #18203A, var(--bg-2) 55%);
+    padding: 18px 16px 22px; display: flex; flex-direction: column; gap: 13px;
+  }
+  .phone-notch { width: 110px; height: 26px; border-radius: 99px; background: #05060A; margin: 0 auto 2px; }
+  .ph-head { display: flex; align-items: center; justify-content: space-between; }
+  .ph-bal { display: flex; align-items: center; gap: 6px; background: rgba(255,197,61,0.1);
+    border: 1px solid rgba(255,197,61,0.4); border-radius: 999px; padding: 4px 11px;
+    font-weight: 1000; font-size: 13px; color: var(--gold); }
+  .flame { position: relative; width: 20px; height: 23px; }
+  .flame::before { content: ''; position: absolute; bottom: 1px; left: 2px; width: 16px; height: 16px;
+    background: linear-gradient(135deg, var(--gold), #FF8A1E);
+    border-radius: 4% 50% 50% 50%; transform: rotate(45deg);
+    animation: lp-flame 0.8s ease-in-out infinite;
+    box-shadow: 0 0 9px rgba(255,138,30,0.5); }
+  .ph-card { background: linear-gradient(180deg, var(--card-2), var(--card));
+    border: 1px solid var(--line); border-radius: 18px; padding: 13px 14px; }
+  .ph-label { font-size: 9px; font-weight: 900; letter-spacing: 0.13em; color: var(--muted);
+    display: flex; align-items: center; gap: 6px; }
+  .live-dot { width: 6px; height: 6px; border-radius: 99px; background: var(--up);
+    box-shadow: 0 0 6px var(--up); animation: lp-glow 1.4s ease-in-out infinite; }
+  .ph-price { font-family: var(--display); font-size: 30px; margin-top: 3px; }
+  .ph-price small { font-size: 16px; color: var(--muted); }
+  .ph-buttons { display: flex; gap: 10px; }
+  .ph-btn { flex: 1; height: 86px; border: none; border-radius: 19px; cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+    font-family: var(--display); transition: transform 0.07s, box-shadow 0.07s; }
+  .ph-btn .arrow { font-size: 26px; line-height: 1; }
+  .ph-btn .word { font-size: 17px; letter-spacing: 0.04em; }
+  .ph-btn .odds { font-family: var(--ui); font-weight: 1000; font-size: 12px; opacity: 0.7; }
+  .ph-btn.up { color: #06291A; background: linear-gradient(180deg, var(--up-hi), var(--up) 42%);
+    box-shadow: 0 6px 0 var(--up-edge), 0 11px 22px var(--up-glow); }
+  .ph-btn.down { color: #2B0410; background: linear-gradient(180deg, var(--down-hi), var(--down) 42%);
+    box-shadow: 0 6px 0 var(--down-edge), 0 11px 22px var(--down-glow); }
+  .ph-btn:active { transform: translateY(5px) scale(0.985); }
+  .ph-btn.up:active { box-shadow: 0 1px 0 var(--up-edge); }
+  .ph-btn.down:active { box-shadow: 0 1px 0 var(--down-edge); }
+  .ph-stakes { display: flex; gap: 8px; }
+  .ph-stake { flex: 1; padding: 9px 0; border-radius: 12px; text-align: center;
+    font-weight: 1000; font-size: 14px; background: rgba(255,255,255,0.05);
+    border: 1.5px solid var(--line); color: var(--text); }
+  .ph-stake.on { background: linear-gradient(180deg, #2A3450, #1E2740); border-color: var(--gold); color: var(--gold); }
+
+  /* ── teaser ── */
+  .teaser { margin-top: -8px; padding: 26px 0 0; }
+  .teaser-card {
+    display: flex; align-items: center; gap: 26px; flex-wrap: wrap;
+    background: linear-gradient(180deg, var(--card-2), var(--card));
+    border: 1px solid var(--line); border-radius: 24px; padding: 20px 28px;
+    box-shadow: 0 18px 50px rgba(0,0,0,0.4);
+  }
+  .teaser-cell { display: flex; flex-direction: column; gap: 3px; }
+  .teaser-label { font-size: 10px; font-weight: 900; letter-spacing: 0.13em; color: var(--muted);
+    display: flex; align-items: center; gap: 6px; }
+  .teaser-val { font-family: var(--display); font-size: 27px; }
+  .teaser-divider { width: 1px; height: 44px; background: var(--line); }
+  .teaser-spacer { flex: 1; }
+  .teaser-cta { font-weight: 1000; font-size: 15px; color: var(--gold); display: inline-flex; align-items: center; gap: 7px; }
+  .teaser-cta:hover { text-decoration: underline; }
+
+  /* ── how it works ── */
+  .how { padding: 96px 0 30px; }
+  .sec-title { font-family: var(--display); font-size: 42px; text-align: center; margin: 0; }
+  .sec-sub { text-align: center; font-size: 16px; font-weight: 700; color: var(--muted); margin: 12px 0 0; }
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 44px; }
+  .step {
+    background: linear-gradient(180deg, var(--card-2), var(--card));
+    border: 1px solid var(--line); border-radius: 24px; padding: 28px 26px;
+    position: relative; overflow: hidden;
+  }
+  .step-n {
+    font-family: var(--display); font-size: 15px; width: 34px; height: 34px; border-radius: 999px;
+    display: flex; align-items: center; justify-content: center; margin-bottom: 18px;
+    color: #3A2700; background: radial-gradient(circle at 32% 28%, #FFE08A, var(--gold) 60%);
+    box-shadow: inset 0 -2px 0 var(--gold-deep), 0 3px 10px rgba(255,197,61,0.25);
+  }
+  .step h3 { font-family: var(--display); font-weight: 400; font-size: 23px; margin: 0; letter-spacing: 0.02em; }
+  .step p { font-size: 14.5px; font-weight: 700; color: var(--muted); line-height: 1.6; margin: 10px 0 0; text-wrap: pretty; }
+  .step .glowbar { position: absolute; top: 0; left: 26px; right: 26px; height: 2px; border-radius: 99px; opacity: 0.8; }
+  .step:nth-child(1) .glowbar { background: linear-gradient(90deg, transparent, var(--sui), transparent); }
+  .step:nth-child(2) .glowbar { background: linear-gradient(90deg, transparent, var(--up), transparent); }
+  .step:nth-child(3) .glowbar { background: linear-gradient(90deg, transparent, var(--gold), transparent); }
+
+  /* ── trust strip ── */
+  .trust { padding: 60px 0 0; }
+  .trust-in {
+    display: flex; align-items: center; justify-content: center; gap: 0; flex-wrap: wrap;
+    border: 1px solid var(--line); border-radius: 999px; padding: 16px 10px;
+    background: rgba(255,255,255,0.02);
+  }
+  .trust-item { display: flex; align-items: center; gap: 10px; padding: 0 34px;
+    font-weight: 900; font-size: 15px; white-space: nowrap; }
+  .trust-item + .trust-item { border-left: 1px solid var(--line); }
+  .trust-item .mark { width: 22px; height: 22px; border-radius: 99px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 1000; }
+  .trust-item:nth-child(1) .mark { background: rgba(77,162,255,0.15); color: var(--sui); border: 1px solid rgba(77,162,255,0.4); }
+  .trust-item:nth-child(2) .mark { background: rgba(0,224,123,0.12); color: var(--up); border: 1px solid rgba(0,224,123,0.4); }
+  .trust-item:nth-child(3) .mark { background: rgba(255,197,61,0.12); color: var(--gold); border: 1px solid rgba(255,197,61,0.4); }
+
+  /* ── big CTA ── */
+  .bigcta { padding: 110px 0 120px; text-align: center; position: relative; overflow: hidden; }
+  .bigcta::before { content: ''; position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(560px circle at 50% 60%, rgba(255,197,61,0.1), transparent 70%); }
+  .bigcta h2 { font-family: var(--display); font-weight: 400; font-size: 56px; margin: 0; position: relative; }
+  .bigcta h2 .gold { color: var(--gold); }
+  .bigcta p { font-size: 17px; font-weight: 700; color: var(--muted); margin: 16px 0 0; position: relative; }
+  .bigcta .chunky { margin-top: 36px; height: 72px; font-size: 25px; padding: 0 52px; position: relative; }
+
+  /* ── footer ── */
+  footer { border-top: 1px solid var(--line); padding: 34px 0 44px; }
+  .foot-in { display: flex; align-items: center; justify-content: space-between; gap: 18px; flex-wrap: wrap; }
+  .foot-links { display: flex; gap: 26px; font-weight: 800; font-size: 13.5px; color: var(--muted); }
+  .foot-links a:hover { color: var(--text); }
+  .foot-note { font-size: 12px; font-weight: 700; color: var(--muted); opacity: 0.7; }
+
+  /* ── responsive ── */
+  @media (max-width: 920px) {
+    .hero-grid { grid-template-columns: 1fr; gap: 56px; }
+    .hero h1 { font-size: 56px; }
+    .steps { grid-template-columns: 1fr; }
+    .trust-item { border-left: none !important; padding: 8px 18px; }
+    .teaser-divider { display: none; }
+    .bigcta h2 { font-size: 40px; }
+  }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="wrap nav-in">
+    <a class="logo" href="#"><span class="coin">▲</span>Call<span style="color: var(--gold);">It</span></a>
+    <a class="chunky" href="CallIt.html">PLAY NOW</a>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <span class="eyebrow"><span class="live-dot"></span>LIVE ON SUI TESTNET</span>
+      <h1>Call the market.<br /><span class="gold">Win the pot.</span></h1>
+      <p class="sub">15-minute BTC up-or-down calls, settled on-chain. Odds priced off a <b>live volatility surface</b>, payouts claimed for you <b>automatically</b>. No charts degree required.</p>
+      <div class="hero-ctas">
+        <a class="chunky" href="CallIt.html">PLAY NOW</a>
+        <a class="chunky dim" href="CallIt.html">Sign in with Google · zkLogin</a>
+      </div>
+      <div class="hero-fine">Free 100 dUSDC practice stack · no seed phrase, no gas pop-ups</div>
+    </div>
+    <div class="phone-col">
+      <div class="phone">
+        <div class="phone-screen">
+          <div class="phone-notch"></div>
+          <div class="ph-head">
+            <span class="display" style="font-size: 19px;">Call<span style="color: var(--gold);">It</span></span>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="flame"></span>
+              <span class="ph-bal num">128.50</span>
+            </div>
+          </div>
+          <div class="ph-card">
+            <div class="ph-label">BTC · USD <span class="live-dot"></span> LIVE</div>
+            <div class="ph-price num" id="ph-price">$104,318<small>.50</small></div>
+            <canvas id="ph-chart" width="492" height="120" style="width: 246px; height: 60px; display: block; margin-top: 6px;"></canvas>
+          </div>
+          <div class="ph-buttons">
+            <button class="ph-btn up" type="button">
+              <span class="arrow">▲</span><span class="word">UP</span><span class="odds num" id="ph-odds-up">×1.94</span>
+            </button>
+            <button class="ph-btn down" type="button">
+              <span class="arrow">▼</span><span class="word">DOWN</span><span class="odds num" id="ph-odds-down">×2.12</span>
+            </button>
+          </div>
+          <div class="ph-stakes num">
+            <span class="ph-stake">$1</span><span class="ph-stake on">$5</span><span class="ph-stake">$10</span><span class="ph-stake">$25</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="wrap teaser">
+    <div class="teaser-card">
+      <div class="teaser-cell">
+        <span class="teaser-label">BTC · USD <span class="live-dot"></span></span>
+        <span class="teaser-val num" id="tz-price">$104,318</span>
+      </div>
+      <div class="teaser-divider"></div>
+      <div class="teaser-cell">
+        <span class="teaser-label">NEXT 15m ROUND CLOSES</span>
+        <span class="teaser-val num" id="tz-clock">09:42</span>
+      </div>
+      <div class="teaser-divider"></div>
+      <div class="teaser-cell">
+        <span class="teaser-label">LIVE ODDS · VOL SURFACE</span>
+        <div style="display: flex; gap: 8px; margin-top: 4px;">
+          <span class="pill" id="tz-up"><span style="color: var(--up);">▲</span><span class="num">×1.94</span><span class="shine"></span></span>
+          <span class="pill" id="tz-down"><span style="color: var(--down);">▼</span><span class="num">×2.12</span><span class="shine"></span></span>
+        </div>
+      </div>
+      <div class="teaser-spacer"></div>
+      <a class="teaser-cta" href="CallIt.html">Join the round →</a>
+    </div>
+  </div>
+</header>
+
+<section class="how">
+  <div class="wrap">
+    <h2 class="sec-title">Three taps to your first call</h2>
+    <p class="sec-sub">From zero to settled — no wallet setup, no gas, no waiting.</p>
+    <div class="steps">
+      <div class="step">
+        <span class="glowbar"></span>
+        <div class="step-n">1</div>
+        <h3>Sign in with Google</h3>
+        <p>zkLogin spins up a Sui wallet behind your Google account. No seed phrase, no extension, nothing to lose.</p>
+      </div>
+      <div class="step">
+        <span class="glowbar"></span>
+        <div class="step-n">2</div>
+        <h3>Call UP or DOWN</h3>
+        <p>Pick a side on BTC's next 15 minutes and stake your dUSDC. Odds are live-priced off the volatility surface — and win streaks boost your payout.</p>
+      </div>
+      <div class="step">
+        <span class="glowbar"></span>
+        <div class="step-n">3</div>
+        <h3>Get paid on settle, automatically</h3>
+        <p>The oracle snapshots the price at expiry and a keeper claims your winnings straight to your balance. You do nothing but celebrate.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="trust">
+  <div class="wrap">
+    <div class="trust-in">
+      <div class="trust-item"><span class="mark">S</span>Built on Sui</div>
+      <div class="trust-item"><span class="mark">▲</span>Powered by DeepBook Predict</div>
+      <div class="trust-item"><span class="mark">✓</span>No wallet needed — zkLogin</div>
+    </div>
+  </div>
+</section>
+
+<section class="bigcta">
+  <div class="wrap">
+    <h2>The next round starts <span class="gold">now</span>.</h2>
+    <p>Claim your free 100 dUSDC practice stack and make your first call in under a minute.</p>
+    <a class="chunky" href="CallIt.html">PLAY NOW — IT'S FREE</a>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap foot-in">
+    <a class="logo" href="#" style="font-size: 20px;"><span class="coin" style="width: 26px; height: 26px; font-size: 12px;">▲</span>Call<span style="color: var(--gold);">It</span></a>
+    <div class="foot-links">
+      <a href="CallIt.html">Play</a>
+      <a href="#">Docs</a>
+      <a href="#">Telegram</a>
+      <a href="#">X</a>
+    </div>
+    <span class="foot-note">callit.markets · Sui testnet · play money, real rails · © 2026 CallIt</span>
+  </div>
+</footer>
+
+<script>
+(function () {
+  // shared random walk
+  var price = 104318.5, mom = 0, hist = [];
+  function gauss() { return (Math.random() + Math.random() + Math.random() + Math.random() - 2) / 2; }
+  for (var i = 0; i < 60; i++) {
+    mom = mom * 0.86 + gauss() * 0.9;
+    price += price * ((mom * 2.4 + gauss() * 4.5) / 10000) * 0.55;
+    hist.push(price);
+  }
+
+  var phPrice = document.getElementById('ph-price');
+  var tzPrice = document.getElementById('tz-price');
+  var canvas = document.getElementById('ph-chart');
+  var ctx = canvas.getContext('2d');
+  ctx.scale(2, 2);
+
+  function fmt(v, dp) {
+    return v.toLocaleString('en-US', { minimumFractionDigits: dp, maximumFractionDigits: dp });
+  }
+
+  function draw() {
+    var w = 246, h = 60, pad = 2;
+    ctx.clearRect(0, 0, w, h);
+    var min = Math.min.apply(null, hist), max = Math.max.apply(null, hist);
+    var span = Math.max(max - min, 0.0001);
+    var up = hist[hist.length - 1] >= hist[0];
+    var col = up ? '#00E07B' : '#FF3D5E';
+    ctx.beginPath();
+    for (var i = 0; i < hist.length; i++) {
+      var x = pad + (i / (hist.length - 1)) * (w - pad * 2);
+      var y = pad + (1 - (hist[i] - min) / span) * (h - pad * 2 - 4) + 2;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.stroke();
+    ctx.lineTo(w - pad, h); ctx.lineTo(pad, h); ctx.closePath();
+    var g = ctx.createLinearGradient(0, 0, 0, h);
+    g.addColorStop(0, up ? 'rgba(0,224,123,0.25)' : 'rgba(255,61,94,0.25)');
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g; ctx.fill();
+  }
+
+  setInterval(function () {
+    mom = mom * 0.86 + gauss() * 0.9;
+    var prev = price;
+    price += price * ((mom * 2.4 + gauss() * 4.5) * 0.55 / 10000);
+    hist.push(price); if (hist.length > 60) hist.shift();
+    var parts = fmt(price, 2).split('.');
+    phPrice.innerHTML = '$' + parts[0] + '<small>.' + parts[1] + '</small>';
+    phPrice.style.animation = 'none'; void phPrice.offsetWidth;
+    phPrice.style.animation = (price > prev ? 'lp-tick-up' : 'lp-tick-down') + ' 0.5s ease-out';
+    tzPrice.textContent = '$' + parts[0];
+    draw();
+  }, 700);
+  draw();
+
+  // odds drift + shimmer
+  var pUp = 0.515;
+  var upEls = [document.getElementById('ph-odds-up')];
+  var downEls = [document.getElementById('ph-odds-down')];
+  var tzUp = document.getElementById('tz-up'), tzDown = document.getElementById('tz-down');
+  setInterval(function () {
+    pUp = Math.max(0.42, Math.min(0.58, pUp + gauss() * 0.012));
+    var vig = 1.045;
+    var up = Math.max(1.55, Math.min(2.45, 1 / (pUp * vig)));
+    var down = Math.max(1.55, Math.min(2.45, 1 / ((1 - pUp) * vig)));
+    upEls[0].textContent = '×' + up.toFixed(2);
+    downEls[0].textContent = '×' + down.toFixed(2);
+    tzUp.querySelector('.num').textContent = '×' + up.toFixed(2);
+    tzDown.querySelector('.num').textContent = '×' + down.toFixed(2);
+    [tzUp, tzDown].forEach(function (el) {
+      el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
+    });
+  }, 4200);
+
+  // round countdown (15m cycle)
+  var clock = document.getElementById('tz-clock');
+  setInterval(function () {
+    var rem = 900 - Math.floor(Date.now() / 1000) % 900;
+    var m = Math.floor(rem / 60), s = rem % 60;
+    clock.textContent = (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+  }, 500);
+})();
+</script>
+</body>
+</html>

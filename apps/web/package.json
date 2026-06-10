@@ -1,0 +1,10 @@
+{
+  "name": "@callit/web",
+  "private": true,
+  "version": "0.1.0",
+  "description": "CallIt PWA — Next.js app (milestone 3)",
+  "scripts": {
+    "build": "echo 'web app scaffold lands in milestone 3'",
+    "test": "echo 'no tests yet'"
+  }
+}

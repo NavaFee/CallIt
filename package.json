@@ -1,0 +1,15 @@
+{
+  "name": "callit",
+  "private": true,
+  "version": "0.1.0",
+  "description": "CallIt — gamified BTC prediction app on Sui DeepBook Predict",
+  "scripts": {
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "cli": "pnpm --filter @callit/core cli"
+  },
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=20"
+  }
+}

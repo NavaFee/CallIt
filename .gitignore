@@ -1,0 +1,36 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# env & secrets — never commit keys
+.env
+.env.*
+!.env.example
+.wallets/
+*.key
+*.keystore
+sui.keystore
+
+# vendored protocol sources (cloned by scripts/vendor-protocol.sh)
+.vendor/
+
+# build output
+dist/
+.next/
+out/
+*.tsbuildinfo
+
+# test artifacts
+coverage/
+playwright-report/
+test-results/
+
+# local databases / docker volumes
+.pgdata/
+*.sqlite
+
+# os / editor
+.DS_Store
+.idea/
+.vscode/
+*.log
