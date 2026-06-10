@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  unit:
+    name: Typecheck + unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Typecheck packages
+        run: |
+          pnpm --filter @callit/core exec tsc --noEmit -p tsconfig.json
+          pnpm --filter @callit/db exec tsc --noEmit -p tsconfig.json
+          pnpm --filter @callit/worker exec tsc --noEmit -p tsconfig.json
+      - name: Unit tests (core scaling/health/mock-trading, db streaks, bot)
+        run: pnpm -r test
+      - name: Build web app
+        run: pnpm --filter @callit/web build
+        env:
+          MOCK_FUNDS: '1'
+
+  e2e:
+    name: Playwright E2E (mock funds, live testnet reads)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: callit
+          POSTGRES_PASSWORD: callit
+          POSTGRES_DB: callit
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U callit"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://callit:callit@localhost:5432/callit
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: npx playwright install --with-deps chromium
+      - name: Push DB schema
+        run: pnpm --filter @callit/db exec drizzle-kit push --force
+      - name: Run E2E (register → bet → cash out → leaderboard, fuse)
+        run: npx playwright test
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
