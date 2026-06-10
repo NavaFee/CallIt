@@ -58,19 +58,48 @@ export const api = {
     }>('/api/session', { method: 'POST' }),
   airdrop: () => request<{ balanceUnits: string }>('/api/airdrop', { method: 'POST' }),
   bet: (body: { oracleId: string; side: 'up' | 'down'; stakeUnits: string; strike: string }) =>
-    request<{ position: PositionWire; balanceUnits: string; txDigest?: string }>('/api/bet', {
-      method: 'POST',
-      body: JSON.stringify(body),
-    }),
+    request<{
+      position: PositionWire;
+      balanceUnits: string;
+      txDigest?: string;
+      newBadges?: string[];
+    }>('/api/bet', { method: 'POST', body: JSON.stringify(body) }),
   positions: () =>
     request<{ positions: PositionWire[]; balanceUnits: string }>('/api/positions'),
   cashout: (positionId: string) =>
-    request<{ position: PositionWire; payoutUnits: string; balanceUnits: string; txDigest?: string }>(
-      '/api/cashout',
-      { method: 'POST', body: JSON.stringify({ positionId }) },
-    ),
+    request<{
+      position: PositionWire;
+      payoutUnits: string;
+      balanceUnits: string;
+      txDigest?: string;
+      social?: SocialResolution;
+    }>('/api/cashout', { method: 'POST', body: JSON.stringify({ positionId }) }),
   settle: () =>
-    request<{ events: SettlementEventWire[]; balanceUnits: string }>('/api/settle', {
-      method: 'POST',
-    }),
+    request<{ events: SettlementEventWire[]; social?: SocialResolution[]; balanceUnits: string }>(
+      '/api/settle',
+      { method: 'POST' },
+    ),
+  leaderboard: () =>
+    request<{
+      rows: Array<{ userId: string; pnlUnits: string; wins: number; calls: number; streak: number }> | null;
+      you: string | null;
+      available: boolean;
+    }>('/api/leaderboard'),
+  profile: () =>
+    request<{
+      stats: {
+        calls: number;
+        wins: number;
+        cashouts: number;
+        netPnlUnits: string;
+        streak: { current: number; best: number };
+        badges: string[];
+      } | null;
+      available: boolean;
+    }>('/api/profile'),
 };
+
+export interface SocialResolution {
+  newBadges: string[];
+  streak: { current: number; best: number } | null;
+}

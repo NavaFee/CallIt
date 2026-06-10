@@ -1,0 +1,14 @@
+# Local Postgres for the social layer (streaks / leaderboard / badges).
+# Production uses Supabase; the app degrades gracefully without a DB.
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: callit
+      POSTGRES_PASSWORD: callit
+      POSTGRES_DB: callit
+    ports:
+      - '5433:5432'
+    volumes:
+      - ./.pgdata:/var/lib/postgresql/data

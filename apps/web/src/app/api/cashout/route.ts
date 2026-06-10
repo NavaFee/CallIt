@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { jsonSafe } from '@/lib/server/clients';
 import { getSession } from '@/lib/server/session';
+import { socialResolve } from '@/lib/server/social';
 import { tradingPortFor } from '@/lib/server/trading';
 
 export const runtime = 'nodejs';
@@ -22,7 +23,8 @@ export async function POST(req: NextRequest) {
   try {
     const port = tradingPortFor(session);
     const receipt = await port.cashOut(body.positionId);
-    return NextResponse.json(jsonSafe(receipt));
+    const social = await socialResolve(body.positionId, 'cashed_out', receipt.payoutUnits);
+    return NextResponse.json({ ...(jsonSafe(receipt) as object), social });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'cashout failed';
     const status = /no open position|no on-chain quantity/.test(message) ? 404 : 500;

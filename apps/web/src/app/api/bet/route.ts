@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import type { MarketParams } from '@callit/core';
 import { indexer, jsonSafe } from '@/lib/server/clients';
 import { getSession } from '@/lib/server/session';
+import { socialRecordBet } from '@/lib/server/social';
 import { tradingPortFor } from '@/lib/server/trading';
 
 export const runtime = 'nodejs';
@@ -46,7 +47,13 @@ export async function POST(req: NextRequest) {
     };
     const port = tradingPortFor(session);
     const receipt = await port.placeBet({ market, stakeUnits: BigInt(body.stakeUnits) });
-    return NextResponse.json(jsonSafe(receipt));
+    const newBadges = await socialRecordBet(
+      session.address,
+      session.managerId,
+      receipt.position,
+      receipt.txDigest,
+    );
+    return NextResponse.json({ ...(jsonSafe(receipt) as object), newBadges });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'bet failed';
     const status = /not tradeable|insufficient|too small/.test(message) ? 409 : 500;

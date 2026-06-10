@@ -2,7 +2,7 @@
   "name": "@callit/web",
   "private": true,
   "version": "0.1.0",
-  "description": "CallIt PWA — gamified BTC predictions on Sui DeepBook Predict",
+  "description": "CallIt PWA \u2014 gamified BTC predictions on Sui DeepBook Predict",
   "scripts": {
     "dev": "next dev -p 3000",
     "build": "next build",
@@ -15,7 +15,8 @@
     "@mysten/sui": "^2.17.0",
     "next": "^14.2.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "@callit/db": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  transpilePackages: ['@callit/core'],
+  transpilePackages: ['@callit/core', '@callit/db'],
   webpack: (config) => {
     // @callit/core uses NodeNext-style `.js` specifiers in TS source
     config.resolve.extensionAlias = {

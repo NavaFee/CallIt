@@ -11,9 +11,18 @@ import { Onboarding } from './Onboarding';
 import { OpenCallCard, type EnrichedPosition } from './OpenCalls';
 import { ResultOverlay, type ResultData } from './ResultOverlay';
 import { Sparkline } from './Sparkline';
+import { StreakFlame } from './StreakFlame';
 import { useToast } from './Toast';
 
 const STAKES = [1, 5, 10, 25];
+const BADGE_NAMES: Record<string, string> = {
+  first: 'First Call',
+  hat: 'Hat Trick',
+  fire: 'On Fire',
+  exit: 'Smooth Exit',
+  whale: 'High Roller',
+  sharp: 'Sharp Caller',
+};
 const MARKET_POLL_MS = 4_000;
 const QUOTE_POLL_MS = 5_000;
 const POSITIONS_POLL_MS = 12_000;
@@ -33,9 +42,19 @@ export function PlayScreen() {
   const [placing, setPlacing] = useState<number | null>(null);
   const [positions, setPositions] = useState<EnrichedPosition[]>([]);
   const [result, setResult] = useState<ResultData | null>(null);
+  const [streak, setStreak] = useState(0);
   const [chartW, setChartW] = useState(343);
   const chartRef = useRef<HTMLDivElement>(null);
   const settling = useRef(false);
+
+  const announceBadges = useCallback(
+    (types: string[] | undefined) => {
+      for (const t of types ?? []) {
+        toast.push('money', `BADGE UNLOCKED — ${BADGE_NAMES[t] ?? t}`);
+      }
+    },
+    [toast],
+  );
 
   const selected = useMemo(
     () => market?.oracles.find((o) => o.oracleId === selectedId) ?? null,
@@ -52,6 +71,9 @@ export function PlayScreen() {
       .then((res) => {
         setSession(res.session);
         if (res.balanceUnits) setBalanceUnits(res.balanceUnits);
+        if (res.session) {
+          api.profile().then((p) => setStreak(p.stats?.streak.current ?? 0)).catch(() => {});
+        }
       })
       .catch(() => setSession(null));
   }, []);
@@ -174,13 +196,17 @@ export function PlayScreen() {
         for (const e of rest) {
           toast.push('money', `${e.won ? 'WON' : 'LOST'} ${e.won ? '+' : ''}${fmtDusdcUnits(e.payoutUnits)} dUSDC`);
         }
+        for (const s of res.social ?? []) {
+          announceBadges(s.newBadges);
+          if (s.streak) setStreak(s.streak.current);
+        }
         refreshPositions();
       })
       .catch(() => {})
       .finally(() => {
         settling.current = false;
       });
-  }, [openPositions, refreshPositions, toast]);
+  }, [openPositions, refreshPositions, toast, announceBadges]);
 
   // ── actions ────────────────────────────────────────────────────────
   const claim = useCallback(async () => {
@@ -211,6 +237,7 @@ export function PlayScreen() {
       });
       setBalanceUnits(res.balanceUnits);
       toast.push('tx', `Call locked${res.txDigest ? ` on-chain · ${res.txDigest.slice(0, 8)}…` : ''}`);
+      announceBadges(res.newBadges);
       setPicked(null);
       refreshPositions();
     } catch (err) {
@@ -219,7 +246,7 @@ export function PlayScreen() {
       clearInterval(stepper);
       setPlacing(null);
     }
-  }, [picked, selectedId, quote, stake, toast, refreshPositions]);
+  }, [picked, selectedId, quote, stake, toast, refreshPositions, announceBadges]);
 
   const cashOut = useCallback(
     async (positionId: string) => {
@@ -227,6 +254,8 @@ export function PlayScreen() {
       try {
         const res = await api.cashout(positionId);
         setBalanceUnits(res.balanceUnits);
+        announceBadges(res.social?.newBadges);
+        if (res.social?.streak) setStreak(res.social.streak.current);
         refreshPositions();
         setResult({
           kind: 'cashed_out',
@@ -242,7 +271,7 @@ export function PlayScreen() {
         toast.push('error', err instanceof Error ? err.message : 'cashout failed');
       }
     },
-    [positions, refreshPositions, spotUsd, toast],
+    [positions, refreshPositions, spotUsd, toast, announceBadges],
   );
 
   // ── render ─────────────────────────────────────────────────────────
@@ -250,7 +279,7 @@ export function PlayScreen() {
   const delta = points.length >= 2 ? points[points.length - 1]! - points[Math.max(0, points.length - 30)]! : 0;
 
   return (
-    <div className="relative mx-auto flex min-h-dvh w-full max-w-md flex-col gap-3 px-4 pb-8 pt-4">
+    <div className="relative mx-auto flex min-h-dvh w-full max-w-md flex-col gap-3 px-4 pb-28 pt-4">
       {/* header */}
       <header className="flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -267,6 +296,7 @@ export function PlayScreen() {
           <span className="font-display text-[24px]">
             Call<span className="text-gold">It</span>
           </span>
+          {streak > 0 && <StreakFlame streak={streak} size={15} />}
         </div>
         {session && (
           <div className="flex items-center gap-2">
