@@ -67,7 +67,7 @@ export function LeftRail({
 
 /** Right rail (≥1024px): streak card + weekly board. */
 export function RightRail({ streak }: { streak: number }) {
-  const [rows, setRows] = useState<Array<{ userId: string; pnlUnits: string; streak: number }> | null>(null);
+  const [rows, setRows] = useState<Array<{ userId: string; name: string | null; isBot: boolean; pnlUnits: string; streak: number }> | null>(null);
   const [you, setYou] = useState<string | null>(null);
   const [best, setBest] = useState(0);
 
@@ -121,7 +121,10 @@ export function RightRail({ streak }: { streak: number }) {
               >
                 <span className="num w-5 text-center text-[11px] font-black text-muted">{i + 1}</span>
                 <span className="flex-1 truncate text-[11.5px] font-extrabold">
-                  {isYou ? 'you' : shortAddr(row.userId)}
+                  {isYou ? 'you' : row.name ?? shortAddr(row.userId)}
+                  {row.isBot && (
+                    <span className="ml-1 rounded border border-line px-1 text-[7.5px] font-black text-muted">BOT</span>
+                  )}
                 </span>
                 {row.streak >= 2 && <StreakFlame streak={row.streak} size={11} />}
                 <span className="num text-[11.5px] font-black" style={{ color: pnl >= 0 ? 'var(--up)' : 'var(--down)' }}>

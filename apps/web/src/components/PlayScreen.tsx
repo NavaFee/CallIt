@@ -332,6 +332,9 @@ export function PlayScreen() {
               )}
             </div>
             <LivePrice usd={spotUsd} />
+            <div className="mt-0.5 text-[8.5px] font-bold tracking-[0.08em] text-muted opacity-70">
+              TESTNET ORACLE FEED — NOT SPOT BTC
+            </div>
           </div>
           <div
             className="num rounded-full px-2.5 py-1 text-[12px] font-black"

@@ -81,7 +81,15 @@ export const api = {
     ),
   leaderboard: () =>
     request<{
-      rows: Array<{ userId: string; pnlUnits: string; wins: number; calls: number; streak: number }> | null;
+      rows: Array<{
+        userId: string;
+        name: string | null;
+        isBot: boolean;
+        pnlUnits: string;
+        wins: number;
+        calls: number;
+        streak: number;
+      }> | null;
       you: string | null;
       available: boolean;
     }>('/api/leaderboard'),

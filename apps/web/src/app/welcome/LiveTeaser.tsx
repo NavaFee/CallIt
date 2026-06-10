@@ -42,7 +42,7 @@ export function LiveTeaser() {
       style={{ background: 'linear-gradient(180deg, #1A2133, #141927)' }}
     >
       <div>
-        <div className="text-[9px] font-black tracking-[0.12em] text-muted">BTC · LIVE</div>
+        <div className="text-[9px] font-black tracking-[0.12em] text-muted">BTC · TESTNET FEED</div>
         <div className="num font-display text-[27px]">
           {oracle?.spotUsd ? `$${fmtUsd(oracle.spotUsd, 0)}` : '—'}
         </div>

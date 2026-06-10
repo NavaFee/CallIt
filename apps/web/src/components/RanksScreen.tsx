@@ -7,6 +7,8 @@ import { StreakFlame } from './StreakFlame';
 
 interface Row {
   userId: string;
+  name: string | null;
+  isBot: boolean;
   pnlUnits: string;
   wins: number;
   calls: number;
@@ -86,10 +88,16 @@ export function RanksScreen() {
                   <span className="num w-[26px] text-center text-[12px] font-black text-muted">{i + 1}</span>
                 )}
                 <span className={`flex-1 truncate text-[13px] ${isYou ? 'font-black' : 'font-extrabold'}`}>
-                  {isYou ? 'you' : shortAddr(row.userId)}
-                  <span className="ml-2 text-[10px] font-bold text-muted">
-                    {row.wins}/{row.calls} wins
-                  </span>
+                  {isYou ? 'you' : row.name ?? shortAddr(row.userId)}
+                  {row.isBot ? (
+                    <span className="ml-1.5 rounded border border-line px-1 text-[8px] font-black tracking-wide text-muted">
+                      BOT
+                    </span>
+                  ) : (
+                    <span className="ml-2 text-[10px] font-bold text-muted">
+                      {row.wins}/{row.calls} wins
+                    </span>
+                  )}
                 </span>
                 {row.streak >= 2 && <StreakFlame streak={row.streak} size={13} />}
                 <span
