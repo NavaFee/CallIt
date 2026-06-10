@@ -195,3 +195,9 @@ export async function chatIdFor(db: Db, userId: string): Promise<number | null> 
   const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
   return user?.tgChatId ?? null;
 }
+
+/** Reverse lookup for the keeper: PredictManager id → CallIt user id. */
+export async function userByManagerId(db: Db, managerId: string): Promise<string | null> {
+  const [user] = await db.select().from(users).where(eq(users.managerId, managerId)).limit(1);
+  return user?.id ?? null;
+}

@@ -22,10 +22,14 @@ import {
   PredictIndexerClient,
   PredictService,
   loadConfig,
+  positionMarketId,
   unitsToDusdc,
   type MarketParams,
   type OracleRow,
 } from '@callit/core';
+import { getDb, resolvePick, userByManagerId } from '@callit/db';
+import { Bot } from 'grammy';
+import { sendSettlementDM } from './bot.js';
 
 const POLL_FAR_MS = 60_000;
 const POLL_NEAR_MS = 15_000;
@@ -110,7 +114,58 @@ async function claimSettledPositions(oracle: OracleRow): Promise<void> {
       log(
         `  ✓ paid ${unitsToDusdc(r.payout).toFixed(2)} dUSDC to manager ${r.managerId.slice(0, 10)}… (tx ${result.digest})`,
       );
-      // TODO(milestone 5): settlement DM via the notify bot + streak update
+      await notifySettlement(oracle, r.managerId, result.digest).catch((err) =>
+        log(`  notify failed: ${err}`),
+      );
+    }
+  }
+}
+
+/** Social-layer + Telegram follow-up after an on-chain payout (best effort). */
+async function notifySettlement(
+  oracle: OracleRow,
+  managerId: string,
+  _digest: string,
+): Promise<void> {
+  const db = getDb();
+  if (!db) return;
+  const userId = await userByManagerId(db, managerId);
+  if (!userId) return; // not a CallIt user — we still claimed for them
+
+  const minted = await indexer.positionsMinted({ manager_id: managerId, oracle_id: oracle.oracle_id, limit: 50 });
+  const settlementPrice = Number(oracle.settlement_price ?? 0) / 1e9;
+
+  for (const p of minted) {
+    const pickId = positionMarketId({
+      oracleId: p.oracle_id,
+      expiry: BigInt(p.expiry),
+      strike: BigInt(p.strike),
+      isUp: p.is_up,
+    });
+    const strikeUsd = Number(p.strike) / 1e9;
+    const won = p.is_up ? settlementPrice > strikeUsd : settlementPrice <= strikeUsd;
+    const payout = won ? BigInt(p.quantity) : 0n;
+    const resolution = await resolvePick(db, { pickId, result: won ? 'won' : 'lost', payoutUnits: payout });
+    if (!resolution) continue; // already resolved (e.g. cashed out earlier)
+
+    const token = process.env.TELEGRAM_BOT_TOKEN;
+    if (token) {
+      const bot = new Bot(token);
+      await sendSettlementDM(
+        bot.api,
+        db,
+        userId,
+        {
+          won,
+          payoutDusdc: unitsToDusdc(payout),
+          costDusdc: unitsToDusdc(BigInt(p.cost)),
+          isUp: p.is_up,
+          strikeUsd,
+          settleUsd: settlementPrice,
+          streak: resolution.streak.current,
+        },
+        process.env.APP_URL ?? 'https://callit-seven.vercel.app',
+      );
     }
   }
 }

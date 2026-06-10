@@ -6,15 +6,18 @@
   "description": "CallIt keeper (OracleSettled \u2192 redeem_permissionless) and Telegram notify bot",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "echo 'no tests yet'",
+    "test": "vitest run",
     "dev": "tsx src/keeper.ts"
   },
   "dependencies": {
     "@callit/core": "workspace:*",
-    "@mysten/sui": "^2.17.0"
+    "@mysten/sui": "^2.17.0",
+    "grammy": "^1.30.0",
+    "@callit/db": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.6.0",
-    "tsx": "^4.21.0"
+    "tsx": "^4.21.0",
+    "vitest": "^3.0.0"
   }
 }

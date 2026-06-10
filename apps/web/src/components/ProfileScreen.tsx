@@ -114,6 +114,34 @@ export function ProfileScreen({ address }: { address: string | null }) {
         </div>
       </div>
 
+      {/* telegram binding */}
+      <button
+        type="button"
+        className="ci-pressable rounded-2xl border border-line bg-card px-4 py-3 text-left"
+        onClick={async () => {
+          try {
+            const res = await fetch('/api/telegram', { method: 'POST' });
+            const data = (await res.json()) as { link?: string; error?: string };
+            if (data.link) window.open(data.link, '_blank');
+            else alert(data.error ?? 'Telegram binding unavailable');
+          } catch {
+            alert('Telegram binding unavailable');
+          }
+        }}
+      >
+        <div className="flex items-center gap-3">
+          <span className="flex h-9 w-9 items-center justify-center rounded-full text-[16px]" style={{ background: 'rgba(77,162,255,0.15)', border: '1px solid rgba(77,162,255,0.4)' }}>
+            ✈️
+          </span>
+          <div>
+            <div className="text-[13px] font-black">Connect Telegram</div>
+            <div className="text-[10.5px] font-bold text-muted">
+              Get a DM the moment your calls settle — results land while you sleep
+            </div>
+          </div>
+        </div>
+      </button>
+
       {/* history */}
       <div className="rounded-3xl border border-line bg-card p-2">
         <h2 className="px-2 pt-2 text-[10px] font-black tracking-[0.14em] text-muted">CALL HISTORY</h2>
