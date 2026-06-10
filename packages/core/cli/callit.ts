@@ -20,6 +20,7 @@ import { MIST_PER_SUI } from '@mysten/sui/utils';
 import { loadConfig } from '../src/config.js';
 import { evaluateOracleHealth, expiryLabel } from '../src/health.js';
 import { PredictIndexerClient } from '../src/indexer/client.js';
+import { OracleCache } from '../src/indexer/oracleCache.js';
 import type { OracleRow } from '../src/indexer/types.js';
 import { PredictService, type MarketParams } from '../src/chain/predictService.js';
 import {
@@ -49,6 +50,12 @@ const client = new SuiJsonRpcClient({
   network: cfg.network,
 });
 const indexer = new PredictIndexerClient(cfg.indexerUrl);
+const oracleCache = new OracleCache(indexer, cfg.predictObjectId, {
+  cacheFile: path.resolve(
+    path.dirname(fileURLToPath(import.meta.url)),
+    '../../../.cache/oracles.json',
+  ),
+});
 const service = new PredictService(client, cfg);
 
 interface Args {
@@ -109,7 +116,8 @@ async function execute(keypair: Ed25519Keypair, tx: ReturnType<PredictService['b
 /** Pick the betting oracle: --oracle id, or --expiry-index into active list (default 0 = soonest). */
 async function pickOracle(args: Args): Promise<OracleRow> {
   const explicit = args.flags.get('oracle');
-  const active = await indexer.activeOracles(cfg.predictObjectId);
+  const { rows: active, stale } = await oracleCache.getActive();
+  if (stale) console.log('(indexer slow — using cached oracle list)');
   if (active.length === 0) {
     throw new Error('no active oracles on testnet right now');
   }
@@ -193,8 +201,8 @@ async function cmdWallet(args: Args) {
 async function cmdStatus() {
   const status = await indexer.status();
   console.log(`indexer ${status.status}, lag ${status.max_time_lag_seconds}s`);
-  const active = await indexer.activeOracles(cfg.predictObjectId);
-  console.log(`active oracles: ${active.length}`);
+  const { rows: active, stale } = await oracleCache.getActive();
+  console.log(`active oracles: ${active.length}${stale ? ' (cached — indexer slow)' : ''}`);
   for (const oracle of active) {
     const state = await indexer.oracleState(oracle.oracle_id);
     const health = evaluateOracleHealth(state);
