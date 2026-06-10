@@ -5,7 +5,7 @@ import type { MarketParams, PredictService } from '../chain/predictService.js';
 import type { PredictConfig } from '../config.js';
 import { evaluateOracleHealth } from '../health.js';
 import type { PredictIndexerClient } from '../indexer/client.js';
-import { stakeToQuantity } from '../units.js';
+import { sizeStake } from './sizing.js';
 import {
   positionMarketId,
   type BetReceipt,
@@ -75,12 +75,11 @@ export class RealTradingService implements TradingPort {
       throw new Error(`oracle not tradeable: ${health.reason} — ${health.detail}`);
     }
 
-    const probe = 1_000_000n;
-    const { mintCost: unitCost } = await this.predict.getTradeAmounts(market, probe);
-    const askPrice = (unitCost * 1_000_000_000n) / probe;
-    const quantity = stakeToQuantity(stakeUnits, askPrice);
-    if (quantity <= 0n) throw new Error('stake too small for current ask');
-    const { mintCost } = await this.predict.getTradeAmounts(market, quantity);
+    const { quantityUnits: quantity, costUnits: mintCost } = await sizeStake(
+      this.predict,
+      market,
+      stakeUnits,
+    );
 
     const managerBalance = await this.predict.getManagerBalance(this.managerId);
     const required = (mintCost * 102n) / 100n; // 2% buffer absorbs ask drift

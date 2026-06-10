@@ -1,7 +1,7 @@
 import type { MarketParams, PredictService } from '../chain/predictService.js';
 import { evaluateOracleHealth } from '../health.js';
 import type { PredictIndexerClient } from '../indexer/client.js';
-import { stakeToQuantity } from '../units.js';
+import { sizeStake } from './sizing.js';
 import { EMPTY_LEDGER, type LedgerStore, type MockLedgerStateJSON } from './ledgerStore.js';
 import {
   positionMarketId,
@@ -59,13 +59,12 @@ export class MockTradingService implements TradingPort {
       throw new Error(`oracle not tradeable: ${health.reason} — ${health.detail}`);
     }
 
-    // real protocol pricing for sizing and cost
-    const probe = 1_000_000n;
-    const { mintCost: unitCost } = await this.predict.getTradeAmounts(market, probe);
-    const askPrice = (unitCost * 1_000_000_000n) / probe;
-    const quantityUnits = stakeToQuantity(stakeUnits, askPrice);
-    if (quantityUnits <= 0n) throw new Error('stake too small for current ask');
-    const { mintCost } = await this.predict.getTradeAmounts(market, quantityUnits);
+    // real protocol pricing for sizing and cost (cost never exceeds stake)
+    const { quantityUnits, costUnits: mintCost, askPrice } = await sizeStake(
+      this.predict,
+      market,
+      stakeUnits,
+    );
 
     const state = await this.state();
     const balance = BigInt(state.balanceUnits);

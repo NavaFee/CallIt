@@ -1,0 +1,13 @@
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  transpilePackages: ['@callit/core'],
+  webpack: (config) => {
+    // @callit/core uses NodeNext-style `.js` specifiers in TS source
+    config.resolve.extensionAlias = {
+      '.js': ['.ts', '.tsx', '.js'],
+    };
+    return config;
+  },
+};
+
+export default nextConfig;

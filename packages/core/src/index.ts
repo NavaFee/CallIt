@@ -6,6 +6,7 @@ export * from './indexer/oracleCache.js';
 export * from './indexer/types.js';
 export * from './chain/predictService.js';
 export * from './trading/types.js';
+export * from './trading/sizing.js';
 export * from './trading/ledgerStore.js';
 export * from './trading/mock.js';
 export * from './trading/real.js';

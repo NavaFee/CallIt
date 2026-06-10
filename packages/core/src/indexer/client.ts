@@ -1,6 +1,7 @@
 import type {
   IndexerStatus,
   ManagerRow,
+  OraclePriceRow,
   OracleRow,
   OracleStateResponse,
   PositionMintedRow,
@@ -90,6 +91,11 @@ export class PredictIndexerClient {
 
   oracleState(oracleId: string): Promise<OracleStateResponse> {
     return this.get(`/oracles/${oracleId}/state`);
+  }
+
+  /** Recent price prints for one oracle, newest first. */
+  prices(oracleId: string, params?: { limit?: number }): Promise<OraclePriceRow[]> {
+    return this.get(`/oracles/${oracleId}/prices`, params);
   }
 
   quoteAssets(predictId: string): Promise<string[]> {
