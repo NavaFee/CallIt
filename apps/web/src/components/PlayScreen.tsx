@@ -47,6 +47,11 @@ export function PlayScreen() {
   const [chartW, setChartW] = useState(343);
   const chartRef = useRef<HTMLDivElement>(null);
   const settling = useRef(false);
+  // real-mode settle events repeat until the keeper claims — announce once
+  const announced = useRef(new Set<string>());
+  const [offline, setOffline] = useState(0);
+  // bumped on every mutation; stale poll responses are dropped
+  const balanceVersion = useRef(0);
 
   const announceBadges = useCallback(
     (types: string[] | undefined) => {
@@ -87,13 +92,16 @@ export function PlayScreen() {
         .market()
         .then((snap) => {
           if (!alive) return;
+          setOffline(0);
           setMarket(snap);
           setSelectedId((cur) => {
             if (cur && snap.oracles.some((o) => o.oracleId === cur)) return cur;
             return snap.oracles.find((o) => o.tradeable)?.oracleId ?? snap.oracles[0]?.oracleId ?? null;
           });
         })
-        .catch(() => {});
+        .catch(() => {
+          if (alive) setOffline((n) => n + 1);
+        });
     load();
     const t = setInterval(load, MARKET_POLL_MS);
     return () => {
@@ -159,11 +167,14 @@ export function PlayScreen() {
   // ── positions + settlement detection ───────────────────────────────
   const refreshPositions = useCallback(() => {
     if (!session) return;
+    const version = balanceVersion.current;
     api
       .positions()
       .then((res) => {
         setPositions(res.positions as EnrichedPosition[]);
-        setBalanceUnits(res.balanceUnits);
+        // a bet/cashout/settle landed while this poll was in flight — its
+        // balance is authoritative, the poll's snapshot is stale
+        if (balanceVersion.current === version) setBalanceUnits(res.balanceUnits);
       })
       .catch(() => {});
   }, [session]);
@@ -181,8 +192,11 @@ export function PlayScreen() {
     api
       .settle()
       .then((res) => {
+        balanceVersion.current += 1;
         setBalanceUnits(res.balanceUnits);
-        const [first, ...rest] = res.events;
+        const fresh = res.events.filter((e) => !announced.current.has(e.position.id));
+        for (const e of fresh) announced.current.add(e.position.id);
+        const [first, ...rest] = fresh;
         if (first) {
           setResult({
             kind: first.won ? 'won' : 'lost',
@@ -236,6 +250,7 @@ export function PlayScreen() {
         stakeUnits: BigInt(Math.round(stake * 1e6)).toString(),
         strike: quote.strike,
       });
+      balanceVersion.current += 1;
       setBalanceUnits(res.balanceUnits);
       toast.push('tx', `Call locked${res.txDigest ? ` on-chain · ${res.txDigest.slice(0, 8)}…` : ''}`);
       announceBadges(res.newBadges);
@@ -254,6 +269,7 @@ export function PlayScreen() {
       const pos = positions.find((p) => p.id === positionId);
       try {
         const res = await api.cashout(positionId);
+        balanceVersion.current += 1;
         setBalanceUnits(res.balanceUnits);
         announceBadges(res.social?.newBadges);
         if (res.social?.streak) setStreak(res.social.streak.current);
@@ -350,6 +366,20 @@ export function PlayScreen() {
           <Sparkline points={points} width={chartW} height={120} up={priceUp} />
         </div>
       </section>
+
+      {/* connection banner */}
+      {offline >= 2 && (
+        <div
+          className="rounded-2xl border px-4 py-2.5 text-center"
+          style={{ borderColor: 'rgba(255,197,61,0.5)', background: 'rgba(255,197,61,0.08)' }}
+          data-testid="offline-banner"
+        >
+          <span className="text-[12px] font-black text-gold" style={{ animation: 'ci-blink 1.2s infinite' }}>
+            CONNECTION LOST
+          </span>
+          <span className="ml-2 text-[11px] font-bold text-muted">retrying — your funds are safe on-chain</span>
+        </div>
+      )}
 
       {/* fuse banner */}
       {fuse && (

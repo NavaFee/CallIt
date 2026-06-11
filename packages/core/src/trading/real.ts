@@ -182,9 +182,44 @@ export class RealTradingService implements TradingPort {
     return positions.sort((a, b) => b.placedAt - a.placedAt);
   }
 
-  /** Settlement payouts are claimed by the keeper (redeem_permissionless). */
+  /**
+   * Detect settlements for the UI — no chain writes (the keeper claims via
+   * redeem_permissionless). For every still-held position whose oracle has
+   * settled, emit the outcome computed from the real settlement price.
+   * Callers must dedupe: events repeat until the keeper's claim zeroes the
+   * on-chain quantity.
+   */
   async settle(): Promise<SettlementEvent[]> {
-    return [];
+    const positions = await this.listPositions();
+    const events: SettlementEvent[] = [];
+    const oracleCache = new Map<string, { settled: boolean; price: bigint | null }>();
+
+    for (const position of positions) {
+      if (position.status !== 'open') continue;
+      if (Number(position.market.expiry) > Date.now()) continue;
+
+      let oracle = oracleCache.get(position.market.oracleId);
+      if (!oracle) {
+        const { oracle: fresh } = await this.indexer.oracleState(position.market.oracleId);
+        oracle = {
+          settled: fresh.status === 'settled' && fresh.settlement_price != null,
+          price: fresh.settlement_price != null ? BigInt(fresh.settlement_price) : null,
+        };
+        oracleCache.set(position.market.oracleId, oracle);
+      }
+      if (!oracle.settled || oracle.price == null) continue;
+
+      const won = position.market.isUp
+        ? oracle.price > position.market.strike
+        : oracle.price <= position.market.strike;
+      events.push({
+        position: { ...position, status: won ? 'won' : 'lost' },
+        settlementPrice: oracle.price,
+        won,
+        payoutUnits: won ? position.quantityUnits : 0n,
+      });
+    }
+    return events;
   }
 }
 

@@ -50,9 +50,8 @@ test('register → bet → cash out → leaderboard', async ({ page }) => {
   await page.getByTestId('result-close').click();
 
   // spread costs money: balance is back above the post-bet level but below 100
-  const afterCashout = await balanceOf(page);
-  expect(afterCashout).toBeGreaterThan(afterBet);
-  expect(afterCashout).toBeLessThan(100);
+  await expect.poll(() => balanceOf(page), { timeout: 15_000 }).toBeGreaterThan(afterBet);
+  expect(await balanceOf(page)).toBeLessThan(100);
 
   // ── leaderboard reflects the realized result (needs DATABASE_URL) ─
   await page.getByTestId('tab-ranks').click();
