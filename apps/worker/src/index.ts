@@ -11,6 +11,7 @@ import { loadConfig, unitsToDusdc } from '@callit/core';
 import { Bot } from 'grammy';
 import { runBot } from './bot.js';
 import { runKeeper } from './keeper.js';
+import { runMockSettler } from './mockSettler.js';
 
 const MONITOR_INTERVAL_MS = 10 * 60_000;
 const REALERT_MS = 6 * 3600_000;
@@ -76,7 +77,7 @@ async function runOpsMonitor(): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  const tasks = [runKeeper(), runOpsMonitor()];
+  const tasks = [runKeeper(), runOpsMonitor(), runMockSettler()];
   if (process.env.TELEGRAM_BOT_TOKEN) {
     tasks.push(runBot());
   } else {

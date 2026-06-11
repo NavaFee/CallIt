@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { applyResult, earnedBadges } from '@callit/db';
+import { applyResult, chatIdFor, earnedBadges, getDb } from '@callit/db';
 import type { Position } from '@callit/core';
 import { getSession } from '@/lib/server/session';
 import { socialProfile } from '@/lib/server/social';
@@ -12,18 +12,23 @@ export async function GET() {
   const session = getSession();
   if (!session) return NextResponse.json({ error: 'no session' }, { status: 401 });
 
+  const db = getDb();
+  const tgLinked = db
+    ? (await chatIdFor(db, session.address).catch(() => null)) !== null
+    : false;
+
   const dbStats = await socialProfile(session.address);
   if (dbStats) {
-    return NextResponse.json({ stats: dbStats, available: true });
+    return NextResponse.json({ stats: dbStats, tgLinked, available: true });
   }
 
   // No database: derive the same stats from the session's positions so the
   // profile never contradicts the play screen, whatever the deployment.
   try {
     const positions = await tradingPortFor(session).listPositions();
-    return NextResponse.json({ stats: deriveStats(positions), available: true });
+    return NextResponse.json({ stats: deriveStats(positions), tgLinked, available: true });
   } catch {
-    return NextResponse.json({ stats: null, available: false });
+    return NextResponse.json({ stats: null, tgLinked, available: false });
   }
 }
 

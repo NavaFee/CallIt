@@ -104,6 +104,7 @@ export const api = {
         streak: { current: number; best: number };
         badges: string[];
       } | null;
+      tgLinked?: boolean;
       available: boolean;
     }>('/api/profile'),
 };

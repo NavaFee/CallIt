@@ -281,3 +281,9 @@ export async function saveLedger(db: Db, userId: string, state: unknown): Promis
 export async function clearTgBinding(db: Db, tgId: number): Promise<void> {
   await db.update(users).set({ tgChatId: null }).where(eq(users.tgChatId, tgId));
 }
+
+/** All mock ledgers — scanned by the worker's mock settler. */
+export async function allLedgers(db: Db): Promise<Array<{ userId: string; state: unknown }>> {
+  const rows = await db.select().from(ledgers);
+  return rows.map((r) => ({ userId: r.userId, state: r.state }));
+}

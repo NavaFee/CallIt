@@ -108,6 +108,13 @@ test('mini app: silent login → bet via MainButton → cash out', async ({ page
   await page.mouse.up();
   await expect(page.getByTestId('result-overlay')).toBeVisible({ timeout: 60_000 });
   await expect(page.getByTestId('result-overlay')).toContainText('CASHED OUT');
+  await page.getByTestId('result-close').click();
+
+  // profile must show the linked state — never the connect CTA in the Mini App
+  await page.getByTestId('tab-profile').click();
+  await expect(page.getByTestId('tg-linked-card')).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId('tg-linked-card')).toContainText('Telegram linked');
+  await expect(page.getByTestId('tg-connect-card')).toHaveCount(0);
 });
 
 test('mini app: forged initData is rejected', async ({ request }) => {

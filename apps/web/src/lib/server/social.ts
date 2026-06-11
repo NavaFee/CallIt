@@ -47,6 +47,8 @@ export async function socialRecordBet(
 }
 
 export interface SocialResolution {
+  /** true iff THIS call transitioned the pick from open — the DM gate */
+  resolved: boolean;
   newBadges: BadgeType[];
   streak: { current: number; best: number } | null;
 }
@@ -57,13 +59,13 @@ export async function socialResolve(
   payoutUnits: bigint,
 ): Promise<SocialResolution> {
   const db = getDb();
-  if (!db) return { newBadges: [], streak: null };
+  if (!db) return { resolved: false, newBadges: [], streak: null };
   try {
     const res = await resolvePick(db, { pickId, result, payoutUnits });
-    return { newBadges: res?.newBadges ?? [], streak: res?.streak ?? null };
+    return { resolved: res !== null, newBadges: res?.newBadges ?? [], streak: res?.streak ?? null };
   } catch (err) {
     console.error('social resolve failed:', err);
-    return { newBadges: [], streak: null };
+    return { resolved: false, newBadges: [], streak: null };
   }
 }
 

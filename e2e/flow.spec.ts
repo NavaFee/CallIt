@@ -71,6 +71,9 @@ test('register → bet → cash out → leaderboard', async ({ page }) => {
   if (process.env.DATABASE_URL) {
     await expect(page.getByTestId('profile-screen')).toContainText('CASH-OUT');
   }
+  // an unbound web account is offered the connect CTA, not the linked state
+  await expect(page.getByTestId('tg-connect-card')).toBeVisible();
+  await expect(page.getByTestId('tg-linked-card')).toHaveCount(0);
 });
 
 test('oracle fuse: stale feeds disable betting', async ({ page }) => {

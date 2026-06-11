@@ -5,6 +5,7 @@ import { api, type PositionWire } from '@/lib/api';
 import { fixedToUsdNum, fmtDusdcUnits, fmtUsd, shortAddr } from '@/lib/format';
 import { StreakFlame } from './StreakFlame';
 import { WalletSheet } from './WalletSheet';
+import { tgWebApp } from '@/lib/tg';
 
 const BADGES = [
   { type: 'first', name: 'First Call', description: 'Place your first call', glyph: '▲' },
@@ -50,10 +51,19 @@ function BadgeCoin({ unlocked, glyph, size = 46 }: { unlocked: boolean; glyph: s
 export function ProfileScreen({ address }: { address: string | null }) {
   const [stats, setStats] = useState<Stats | null>(null);
   const [walletOpen, setWalletOpen] = useState(false);
+  const [tgLinked, setTgLinked] = useState(false);
+  const [isTg, setIsTg] = useState(false);
   const [history, setHistory] = useState<PositionWire[]>([]);
 
   useEffect(() => {
-    api.profile().then((res) => setStats(res.stats)).catch(() => {});
+    setIsTg(tgWebApp() !== null);
+    api
+      .profile()
+      .then((res) => {
+        setStats(res.stats);
+        setTgLinked(res.tgLinked ?? false);
+      })
+      .catch(() => {});
     api.positions().then((res) => setHistory(res.positions.filter((p) => p.status !== 'open'))).catch(() => {});
   }, []);
 
@@ -123,33 +133,57 @@ export function ProfileScreen({ address }: { address: string | null }) {
         </div>
       </div>
 
-      {/* telegram binding */}
-      <button
-        type="button"
-        className="ci-pressable rounded-2xl border border-line bg-card px-4 py-3 text-left"
-        onClick={async () => {
-          try {
-            const res = await fetch('/api/telegram', { method: 'POST' });
-            const data = (await res.json()) as { link?: string; error?: string };
-            if (data.link) window.open(data.link, '_blank');
-            else alert(data.error ?? 'Telegram binding unavailable');
-          } catch {
-            alert('Telegram binding unavailable');
-          }
-        }}
-      >
-        <div className="flex items-center gap-3">
-          <span className="flex h-9 w-9 items-center justify-center rounded-full text-[16px]" style={{ background: 'rgba(77,162,255,0.15)', border: '1px solid rgba(77,162,255,0.4)' }}>
-            ✈️
-          </span>
-          <div>
-            <div className="text-[13px] font-black">Connect Telegram</div>
-            <div className="text-[10.5px] font-bold text-muted">
-              Get a DM the moment your calls settle — results land while you sleep
+      {/* telegram: inside the Mini App (or once bound) the connect CTA never shows */}
+      {isTg || tgLinked ? (
+        <div
+          className="rounded-2xl border px-4 py-3"
+          style={{ borderColor: 'rgba(0,224,123,0.4)', background: 'rgba(0,224,123,0.06)' }}
+          data-testid="tg-linked-card"
+        >
+          <div className="flex items-center gap-3">
+            <span
+              className="flex h-9 w-9 items-center justify-center rounded-full text-[16px]"
+              style={{ background: 'rgba(0,224,123,0.12)', border: '1px solid rgba(0,224,123,0.4)' }}
+            >
+              ✓
+            </span>
+            <div>
+              <div className="text-[13px] font-black text-up">Telegram linked ✓</div>
+              <div className="text-[10.5px] font-bold text-muted">
+                settlement alerts on — results land while you sleep
+              </div>
             </div>
           </div>
         </div>
-      </button>
+      ) : (
+        <button
+          type="button"
+          className="ci-pressable rounded-2xl border border-line bg-card px-4 py-3 text-left"
+          data-testid="tg-connect-card"
+          onClick={async () => {
+            try {
+              const res = await fetch('/api/telegram', { method: 'POST' });
+              const data = (await res.json()) as { link?: string; error?: string };
+              if (data.link) window.open(data.link, '_blank');
+              else alert(data.error ?? 'Telegram binding unavailable');
+            } catch {
+              alert('Telegram binding unavailable');
+            }
+          }}
+        >
+          <div className="flex items-center gap-3">
+            <span className="flex h-9 w-9 items-center justify-center rounded-full text-[16px]" style={{ background: 'rgba(77,162,255,0.15)', border: '1px solid rgba(77,162,255,0.4)' }}>
+              ✈️
+            </span>
+            <div>
+              <div className="text-[13px] font-black">Connect Telegram</div>
+              <div className="text-[10.5px] font-bold text-muted">
+                Get a DM the moment your calls settle — results land while you sleep
+              </div>
+            </div>
+          </div>
+        </button>
+      )}
 
       {/* history */}
       <div className="rounded-3xl border border-line bg-card p-2">
