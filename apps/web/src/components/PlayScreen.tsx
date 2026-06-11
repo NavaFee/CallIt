@@ -50,6 +50,7 @@ export function PlayScreen() {
   // real-mode settle events repeat until the keeper claims — announce once
   const announced = useRef(new Set<string>());
   const [offline, setOffline] = useState(0);
+  const [refueling, setRefueling] = useState(false);
   // bumped on every mutation; stale poll responses are dropped
   const balanceVersion = useRef(0);
 
@@ -229,7 +230,11 @@ export function PlayScreen() {
       const res = await api.register();
       setSession(res.session);
       setBalanceUnits(res.balanceUnits);
-      toast.push('money', `+${fmtDusdcUnits(res.airdroppedUnits)} dUSDC welcome stack`);
+      if (res.airdropFailed) {
+        setRefueling(true);
+      } else {
+        toast.push('money', `+${fmtDusdcUnits(res.airdroppedUnits)} dUSDC welcome stack`);
+      }
       if (res.session.managerId) {
         toast.push('tx', `On-chain account ${shortAddr(res.session.managerId)} created`);
       }
@@ -366,6 +371,20 @@ export function PlayScreen() {
           <Sparkline points={points} width={chartW} height={120} up={priceUp} />
         </div>
       </section>
+
+      {/* airdrop pool degraded state */}
+      {refueling && (
+        <div
+          className="rounded-2xl border px-4 py-3 text-center"
+          style={{ borderColor: 'rgba(77,162,255,0.5)', background: 'rgba(77,162,255,0.08)' }}
+          data-testid="refueling-banner"
+        >
+          <div className="font-display text-[15px] text-sui">PRACTICE STACK IS REFUELING</div>
+          <div className="text-[11px] font-bold text-muted">
+            The faucet pool is topping up — ping us on Telegram and we’ll fund you by hand
+          </div>
+        </div>
+      )}
 
       {/* connection banner */}
       {offline >= 2 && (

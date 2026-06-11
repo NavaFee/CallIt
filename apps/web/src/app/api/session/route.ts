@@ -30,7 +30,7 @@ export async function GET() {
 /** Register: session wallet → sponsored manager → welcome airdrop. Idempotent. */
 export async function POST() {
   try {
-    const { session, airdroppedUnits, managerSkipped } = await registerSession();
+    const { session, airdroppedUnits, managerSkipped, airdropFailed } = await registerSession();
     const port = tradingPortFor(session);
     const balanceUnits = await port.getBalance().catch(() => 0n);
     return NextResponse.json({
@@ -38,6 +38,7 @@ export async function POST() {
       airdroppedUnits: airdroppedUnits.toString(),
       balanceUnits: balanceUnits.toString(),
       managerSkipped,
+      airdropFailed,
     });
   } catch (err) {
     return NextResponse.json(

@@ -185,7 +185,7 @@ async function tick(tracked: OracleRow[]): Promise<void> {
   }
 }
 
-async function main(): Promise<void> {
+export async function runKeeper(): Promise<void> {
   log(`keeper starting — predict ${cfg.predictObjectId.slice(0, 10)}… on ${cfg.network}`);
   for (;;) {
     let tracked: OracleRow[] = [];
@@ -208,7 +208,4 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((err) => {
-  console.error('keeper crashed:', err);
-  process.exit(1);
-});
+

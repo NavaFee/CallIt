@@ -28,11 +28,11 @@ export default defineConfig({
     timeout: 120_000,
     env: {
       ...(process.env as Record<string, string>),
-      MOCK_FUNDS: '1',
+      // E2E_REAL=1 exercises real custody end to end — spends testnet dUSDC
+      // (welcome airdrop + spread) and needs SPONSOR_KEY in the environment.
+      MOCK_FUNDS: process.env.E2E_REAL === '1' ? '' : '1',
       SESSION_SECRET: 'e2e-secret',
-      // e2e must pass without on-chain keys
-      SPONSOR_KEY: '',
-      OPS_WALLET_KEY: '',
+      ...(process.env.E2E_REAL === '1' ? {} : { SPONSOR_KEY: '', OPS_WALLET_KEY: '' }),
     },
   },
 });

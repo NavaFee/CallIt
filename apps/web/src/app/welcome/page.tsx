@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { WELCOME_DUSDC } from '@/lib/welcome';
 import { LiveTeaser } from './LiveTeaser';
 
 export const metadata: Metadata = {
@@ -127,7 +128,7 @@ export default function Welcome() {
               </a>
             </div>
             <p className="mt-4 text-[12.5px] font-extrabold text-muted">
-              Free 100 dUSDC practice stack · no seed phrase, no gas pop-ups
+              Free {WELCOME_DUSDC} dUSDC practice stack · no seed phrase, no gas pop-ups
             </p>
           </div>
 
@@ -196,7 +197,7 @@ export default function Welcome() {
           The next round starts <span className="text-gold">now</span>.
         </h2>
         <p className="relative mt-4 text-[17px] font-bold text-muted">
-          Claim your free 100 dUSDC practice stack and make your first call in under a minute.
+          Claim your free {WELCOME_DUSDC} dUSDC practice stack and make your first call in under a minute.
         </p>
         <Link
           href="/"

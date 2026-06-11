@@ -1,11 +1,12 @@
 'use client';
 
 import { useState } from 'react';
+import { WELCOME_DUSDC } from '@/lib/welcome';
 import { ChunkyButton } from './ChunkyButton';
 
 /**
  * First-visit gate: one tap creates the session wallet, sponsors the
- * on-chain PredictManager and drops the 100 dUSDC welcome stack.
+ * on-chain PredictManager and drops the welcome dUSDC stack.
  * zkLogin (Google) lands in the same provider seam later.
  */
 export function Onboarding({ onClaim }: { onClaim: () => Promise<void> }) {
@@ -54,7 +55,7 @@ export function Onboarding({ onClaim }: { onClaim: () => Promise<void> }) {
             }
           }}
         >
-          START — CLAIM 100 dUSDC
+          START — CLAIM {WELCOME_DUSDC} dUSDC
         </ChunkyButton>
       ) : (
         <div className="mt-10 flex h-[62px] flex-col items-center justify-center gap-2">

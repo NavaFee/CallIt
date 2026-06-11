@@ -2,8 +2,9 @@ import { cookies } from 'next/headers';
 import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { Transaction } from '@mysten/sui/transactions';
-import { dusdcToUnits } from '@callit/core';
-import { MOCK_FUNDS, predictService, suiClient } from './clients';
+import { dusdcToUnits, transferDusdc } from '@callit/core';
+import { WELCOME_DUSDC } from '../welcome';
+import { MOCK_FUNDS, cfg, predictService, suiClient } from './clients';
 import { seal, unseal } from './seal';
 import { ledgerStoreFor } from './cookieLedger';
 
@@ -26,7 +27,7 @@ export interface Session {
   provider: 'dev';
 }
 
-export const WELCOME_DUSDC = 100;
+export { WELCOME_DUSDC } from '../welcome';
 /** SUI sent to a fresh session wallet so it can pay its own gas on testnet. */
 const WELCOME_GAS_SUI = 50_000_000n; // 0.05 SUI in MIST
 
@@ -61,6 +62,13 @@ export interface RegistrationResult {
   airdroppedUnits: bigint;
   /** true when no sponsor key is configured, so no on-chain account was made */
   managerSkipped: boolean;
+  /** real mode: welcome transfer failed or the pool hit its reserve floor */
+  airdropFailed: boolean;
+}
+
+/** Demo-day reserve: real airdrops never draw the ops pool below this. */
+function reserveUnits(): bigint {
+  return dusdcToUnits(Number(process.env.OPS_RESERVE_DUSDC ?? '250'));
 }
 
 /**
@@ -70,7 +78,12 @@ export interface RegistrationResult {
 export async function registerSession(): Promise<RegistrationResult> {
   const existing = getSession();
   if (existing) {
-    return { session: existing, airdroppedUnits: 0n, managerSkipped: existing.managerId === null };
+    return {
+      session: existing,
+      airdroppedUnits: 0n,
+      managerSkipped: existing.managerId === null,
+      airdropFailed: false,
+    };
   }
 
   const keypair = Ed25519Keypair.generate();
@@ -111,16 +124,38 @@ export async function registerSession(): Promise<RegistrationResult> {
     session.managerId = predictService.extractManagerId(createResult);
   }
 
-  // welcome stack: mock credit now; ops-wallet dUSDC transfer once funded
+  // welcome stack: mock ledger credit, or a real ops-wallet dUSDC transfer
   let airdroppedUnits = 0n;
+  let airdropFailed = false;
   if (MOCK_FUNDS) {
     airdroppedUnits = dusdcToUnits(WELCOME_DUSDC);
     const store = ledgerStoreFor();
     const state = (await store.load(address)) ?? { balanceUnits: '0', nonce: 0, positions: [] };
     state.balanceUnits = (BigInt(state.balanceUnits) + airdroppedUnits).toString();
     await store.save(address, state);
+  } else if (sponsor) {
+    // never break registration on a failed airdrop — degrade gracefully and
+    // never draw the pool below the demo-day reserve
+    try {
+      const ops = sponsor.getPublicKey().toSuiAddress();
+      const pool = BigInt(
+        (await suiClient.getBalance({ owner: ops, coinType: cfg.dusdcCoinType })).totalBalance,
+      );
+      const amount = dusdcToUnits(WELCOME_DUSDC);
+      if (pool - amount < reserveUnits()) {
+        airdropFailed = true;
+      } else {
+        await transferDusdc(suiClient, cfg, sponsor, address, amount);
+        airdroppedUnits = amount;
+      }
+    } catch (err) {
+      console.error('welcome airdrop failed:', err);
+      airdropFailed = true;
+    }
+  } else {
+    airdropFailed = true;
   }
 
   saveSession(session);
-  return { session, airdroppedUnits, managerSkipped: session.managerId === null };
+  return { session, airdroppedUnits, managerSkipped: session.managerId === null, airdropFailed };
 }

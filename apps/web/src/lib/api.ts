@@ -55,6 +55,7 @@ export const api = {
       airdroppedUnits: string;
       balanceUnits: string;
       managerSkipped: boolean;
+      airdropFailed: boolean;
     }>('/api/session', { method: 'POST' }),
   airdrop: () => request<{ balanceUnits: string }>('/api/airdrop', { method: 'POST' }),
   bet: (body: { oracleId: string; side: 'up' | 'down'; stakeUnits: string; strike: string }) =>

@@ -8,6 +8,8 @@ import { expect, test } from '@playwright/test';
  * is stale the suite fails by design (that is an incident, not noise).
  */
 
+const WELCOME = Number(process.env.NEXT_PUBLIC_WELCOME_DUSDC ?? '25');
+
 async function balanceOf(page: import('@playwright/test').Page): Promise<number> {
   const text = await page.getByTestId('balance').textContent();
   return Number(text!.replace(/,/g, ''));
@@ -20,11 +22,12 @@ test('register → bet → cash out → leaderboard', async ({ page }) => {
   await expect(page.getByTestId('onboarding')).toBeVisible();
   await page.getByTestId('claim-button').click();
   await expect(page.getByTestId('balance')).toBeVisible({ timeout: 60_000 });
-  expect(await balanceOf(page)).toBe(100);
+  expect(await balanceOf(page)).toBe(WELCOME);
 
   // ── live market: price ticking, quotes priced by the protocol ────
-  await expect(page.getByTestId('live-price')).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByTestId('call-up')).toBeEnabled({ timeout: 30_000 });
+  // first market load includes the heavy oracle-list fetch (2 MB, 2–90s)
+  await expect(page.getByTestId('live-price')).toBeVisible({ timeout: 120_000 });
+  await expect(page.getByTestId('call-up')).toBeEnabled({ timeout: 60_000 });
   await expect(page.getByTestId('call-up')).toContainText('×');
 
   // ── place a $5 UP call ────────────────────────────────────────────
@@ -35,8 +38,8 @@ test('register → bet → cash out → leaderboard', async ({ page }) => {
   const openCall = page.getByTestId('open-call').locator('visible=true').first();
   await expect(openCall).toBeVisible({ timeout: 60_000 });
   const afterBet = await balanceOf(page);
-  expect(afterBet).toBeLessThan(100);
-  expect(afterBet).toBeGreaterThanOrEqual(95);
+  expect(afterBet).toBeLessThan(WELCOME);
+  expect(afterBet).toBeGreaterThanOrEqual(WELCOME - 5);
 
   // ── hold-to-confirm cash out at the live bid ─────────────────────
   const cashout = page.getByTestId('cashout-button').locator('visible=true').first();
@@ -49,9 +52,10 @@ test('register → bet → cash out → leaderboard', async ({ page }) => {
   await expect(page.getByTestId('result-overlay')).toContainText('CASHED OUT');
   await page.getByTestId('result-close').click();
 
-  // spread costs money: balance is back above the post-bet level but below 100
+  // cash-out returns most of the stake; in fast markets the exit can even
+  // be profitable, so only bound it loosely above the post-bet level
   await expect.poll(() => balanceOf(page), { timeout: 15_000 }).toBeGreaterThan(afterBet);
-  expect(await balanceOf(page)).toBeLessThan(100);
+  expect(await balanceOf(page)).toBeLessThan(WELCOME + 5);
 
   // ── leaderboard reflects the realized result (needs DATABASE_URL) ─
   await page.getByTestId('tab-ranks').click();
@@ -95,7 +99,7 @@ test('oracle fuse: stale feeds disable betting', async ({ page }) => {
     await expect(page.getByTestId('balance')).toBeVisible({ timeout: 60_000 });
   }
 
-  await expect(page.getByTestId('fuse-banner')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId('fuse-banner')).toBeVisible({ timeout: 120_000 });
   await expect(page.getByTestId('fuse-banner')).toContainText('ORACLE STALE');
   await expect(page.getByTestId('call-up')).toBeDisabled();
   await expect(page.getByTestId('call-down')).toBeDisabled();
