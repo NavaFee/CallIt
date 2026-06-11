@@ -32,6 +32,8 @@ export default defineConfig({
       // (welcome airdrop + spread) and needs SPONSOR_KEY in the environment.
       MOCK_FUNDS: process.env.E2E_REAL === '1' ? '' : '1',
       SESSION_SECRET: 'e2e-secret',
+      // tg-miniapp spec signs initData with this token; server must match
+      TELEGRAM_BOT_TOKEN: 'e2e:TEST-bot-token',
       ...(process.env.E2E_REAL === '1' ? {} : { SPONSOR_KEY: '', OPS_WALLET_KEY: '' }),
     },
   },

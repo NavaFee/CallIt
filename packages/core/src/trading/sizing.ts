@@ -34,7 +34,9 @@ export async function sizeStake(
   if (quantity <= 0n) throw new Error('stake too small for current ask');
 
   let { mintCost, redeemPayout } = await predict.getTradeAmounts(market, quantity);
-  if (mintCost > stakeUnits) {
+  // shrink until the re-quoted cost fits the stake; with ~1s feed updates the
+  // ask can rise between calls, so a single shrink isn't a guarantee
+  for (let i = 0; i < 4 && mintCost > stakeUnits; i++) {
     quantity = (quantity * stakeUnits) / mintCost;
     if (quantity <= 0n) throw new Error('stake too small for current ask');
     ({ mintCost, redeemPayout } = await predict.getTradeAmounts(market, quantity));

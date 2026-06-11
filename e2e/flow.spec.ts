@@ -39,7 +39,8 @@ test('register → bet → cash out → leaderboard', async ({ page }) => {
   await expect(openCall).toBeVisible({ timeout: 60_000 });
   const afterBet = await balanceOf(page);
   expect(afterBet).toBeLessThan(WELCOME);
-  expect(afterBet).toBeGreaterThanOrEqual(WELCOME - 5);
+  // sub-second feed updates can drift the executed cost a hair past the chip
+  expect(afterBet).toBeGreaterThanOrEqual(WELCOME - 5.5);
 
   // ── hold-to-confirm cash out at the live bid ─────────────────────
   const cashout = page.getByTestId('cashout-button').locator('visible=true').first();

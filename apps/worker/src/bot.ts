@@ -89,11 +89,15 @@ export async function sendSettlementDM(
 ): Promise<boolean> {
   const chatId = await chatIdFor(db, userId);
   if (!chatId) return false;
+  // Mini App deep link; startapp carries the sharer as referrer (logged at
+  // the invitee's signup — the future invite-rewards hook, no payouts yet)
+  const botUsername = process.env.TELEGRAM_BOT_USERNAME ?? 'callit_notify_bot';
+  const miniapp = `https://t.me/${botUsername}/play?startapp=${chatId}`;
   const share = card.won
-    ? `I just called BTC ${card.isUp ? 'UP' : 'DOWN'} and won +${card.payoutDusdc.toFixed(2)} dUSDC on CallIt 🎯 ${appUrl}`
-    : `Calling BTC on CallIt — join me: ${appUrl}`;
+    ? `I just called BTC ${card.isUp ? 'UP' : 'DOWN'} and won +${card.payoutDusdc.toFixed(2)} dUSDC on CallIt 🎯 ${miniapp}`
+    : `Calling BTC on CallIt — join me: ${miniapp}`;
   const keyboard = new InlineKeyboard()
-    .url('Play again', appUrl)
+    .url('Play again', miniapp)
     .switchInline('Share', share);
   await api.sendMessage(chatId, renderSettlementCard(card), { reply_markup: keyboard });
   return true;

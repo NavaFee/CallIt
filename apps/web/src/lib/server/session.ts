@@ -6,7 +6,8 @@ import { dusdcToUnits, transferDusdc } from '@callit/core';
 import { WELCOME_DUSDC } from '../welcome';
 import { MOCK_FUNDS, cfg, predictService, suiClient } from './clients';
 import { seal, unseal } from './seal';
-import { ledgerStoreFor } from './cookieLedger';
+import { ledgerStore } from './ledger';
+import { getDb, upsertAccount } from '@callit/db';
 
 /**
  * Dev-fallback auth provider: a server-generated ed25519 session wallet,
@@ -24,7 +25,7 @@ export interface Session {
   address: string;
   managerId: string | null;
   createdAt: number;
-  provider: 'dev';
+  provider: 'dev' | 'telegram';
   /** last daily-refill claim (ms) — rate limit lives in the sealed cookie */
   lastTopupAt?: number;
 }
@@ -87,7 +88,22 @@ export async function registerSession(): Promise<RegistrationResult> {
       airdropFailed: false,
     };
   }
+  const result = await createAccount({ provider: 'dev' });
+  saveSession(result.session);
+  return result;
+}
 
+/**
+ * Account creation shared by web registration and the Mini App: session
+ * wallet → sponsored on-chain manager → welcome airdrop → DB persistence
+ * (sealed key, so the same account opens on any device/host).
+ * Does NOT write the cookie — callers decide.
+ */
+export async function createAccount(opts: {
+  provider: 'dev' | 'telegram';
+  tgChatId?: number;
+  referrerId?: string;
+}): Promise<RegistrationResult> {
   const keypair = Ed25519Keypair.generate();
   const address = keypair.getPublicKey().toSuiAddress();
   const session: Session = {
@@ -95,7 +111,7 @@ export async function registerSession(): Promise<RegistrationResult> {
     address,
     managerId: null,
     createdAt: Date.now(),
-    provider: 'dev',
+    provider: opts.provider,
   };
 
   // on-chain account, sponsored by the ops wallet (dev stand-in for Enoki)
@@ -126,12 +142,25 @@ export async function registerSession(): Promise<RegistrationResult> {
     session.managerId = predictService.extractManagerId(createResult);
   }
 
+  // persist the account before any ledger write (ledgers.user_id FK) — and
+  // so the same account can be reopened from any device (Mini App)
+  const db = getDb();
+  if (db) {
+    await upsertAccount(db, {
+      id: address,
+      managerId: session.managerId,
+      tgChatId: opts.tgChatId,
+      sessionKeySealed: seal(session.sk),
+      referrerId: opts.referrerId,
+    }).catch((err) => console.error('account persist failed:', err));
+  }
+
   // welcome stack: mock ledger credit, or a real ops-wallet dUSDC transfer
   let airdroppedUnits = 0n;
   let airdropFailed = false;
   if (MOCK_FUNDS) {
     airdroppedUnits = dusdcToUnits(WELCOME_DUSDC);
-    const store = ledgerStoreFor();
+    const store = ledgerStore();
     const state = (await store.load(address)) ?? { balanceUnits: '0', nonce: 0, positions: [] };
     state.balanceUnits = (BigInt(state.balanceUnits) + airdroppedUnits).toString();
     await store.save(address, state);
@@ -158,6 +187,5 @@ export async function registerSession(): Promise<RegistrationResult> {
     airdropFailed = true;
   }
 
-  saveSession(session);
   return { session, airdroppedUnits, managerSkipped: session.managerId === null, airdropFailed };
 }

@@ -13,6 +13,7 @@ import { OpenCallCard, type EnrichedPosition } from './OpenCalls';
 import { ResultOverlay, type ResultData } from './ResultOverlay';
 import { Sparkline } from './Sparkline';
 import { WalletSheet } from './WalletSheet';
+import { tgWebApp } from '@/lib/tg';
 import { StreakFlame } from './StreakFlame';
 import { useToast } from './Toast';
 
@@ -53,6 +54,7 @@ export function PlayScreen() {
   const [offline, setOffline] = useState(0);
   const [refueling, setRefueling] = useState(false);
   const [walletOpen, setWalletOpen] = useState(false);
+  const [isTg, setIsTg] = useState(false);
   // bumped on every mutation; stale poll responses are dropped
   const balanceVersion = useRef(0);
 
@@ -73,18 +75,38 @@ export function PlayScreen() {
   const fuse = selected && !selected.tradeable ? selected.fuse ?? { reason: 'unknown', detail: '' } : null;
   const openPositions = positions.filter((p) => p.status === 'open');
 
-  // ── session bootstrap ──────────────────────────────────────────────
+  // ── session bootstrap (Mini App logs in via initData first) ────────
   useEffect(() => {
-    api
-      .session()
-      .then((res) => {
-        setSession(res.session);
-        if (res.balanceUnits) setBalanceUnits(res.balanceUnits);
-        if (res.session) {
-          api.profile().then((p) => setStreak(p.stats?.streak.current ?? 0)).catch(() => {});
+    const boot = async () => {
+      const tg = tgWebApp();
+      if (tg) {
+        setIsTg(true);
+        try {
+          tg.ready();
+          tg.expand();
+          tg.setHeaderColor?.('#07090F');
+          tg.setBackgroundColor?.('#07090F');
+        } catch {
+          // chrome calls are best-effort across TG client versions
         }
-      })
-      .catch(() => setSession(null));
+        await fetch('/api/tg-session', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ initData: tg.initData }),
+        }).catch(() => {});
+      }
+      api
+        .session()
+        .then((res) => {
+          setSession(res.session);
+          if (res.balanceUnits) setBalanceUnits(res.balanceUnits);
+          if (res.session) {
+            api.profile().then((p) => setStreak(p.stats?.streak.current ?? 0)).catch(() => {});
+          }
+        })
+        .catch(() => setSession(null));
+    };
+    void boot();
   }, []);
 
   // ── market poll (oracle list + health + spot) ──────────────────────
@@ -297,6 +319,46 @@ export function PlayScreen() {
     },
     [positions, refreshPositions, spotUsd, toast, announceBadges],
   );
+
+  // ── Telegram Mini App chrome ───────────────────────────────────────
+  const placeBetRef = useRef(placeBet);
+  placeBetRef.current = placeBet;
+
+  useEffect(() => {
+    const tg = tgWebApp();
+    if (!isTg || !tg?.MainButton) return;
+    const button = tg.MainButton;
+    if (picked && quote && placing == null) {
+      const handler = () => placeBetRef.current();
+      button.setParams({
+        text: `LOCK IT IN · WIN ${fmtDusdcUnits(quote[picked].quantityUnits)} dUSDC`,
+        color: picked === 'up' ? '#00E07B' : '#FF3D5E',
+        text_color: picked === 'up' ? '#06291A' : '#2B0410',
+      });
+      button.onClick(handler);
+      button.show();
+      return () => {
+        button.offClick(handler);
+        button.hide();
+      };
+    }
+    button.hide();
+    return undefined;
+  }, [isTg, picked, quote, placing]);
+
+  // closing confirmation while a call is open
+  useEffect(() => {
+    const tg = tgWebApp();
+    if (!isTg || !tg) return;
+    if (openPositions.length > 0) tg.enableClosingConfirmation?.();
+    else tg.disableClosingConfirmation?.();
+  }, [isTg, openPositions.length]);
+
+  // win haptic
+  useEffect(() => {
+    if (!isTg || result?.kind !== 'won') return;
+    tgWebApp()?.HapticFeedback?.notificationOccurred('success');
+  }, [isTg, result]);
 
   // ── render ─────────────────────────────────────────────────────────
   const priceUp = points.length >= 2 ? points[points.length - 1]! >= points[Math.max(0, points.length - 30)]! : true;
@@ -562,6 +624,12 @@ export function PlayScreen() {
                 );
               })}
             </div>
+            {isTg && (
+              <div className="mt-3 text-center text-[11px] font-bold text-muted">
+                confirm with the Telegram button below ↓
+              </div>
+            )}
+            {!isTg && (
             <ChunkyButton
               hue={picked}
               edgeH={6}
@@ -577,6 +645,7 @@ export function PlayScreen() {
                 </span>
               )}
             </ChunkyButton>
+            )}
             {quote && (
               <div className="mt-2 text-center text-[10px] font-bold text-muted">
                 protocol round-trip spread ≈{' '}

@@ -4,7 +4,8 @@ import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { dusdcToUnits, transferDusdc, unitsToDusdc } from '@callit/core';
 import { MOCK_FUNDS, cfg, suiClient } from '@/lib/server/clients';
 import { getSession, saveSession } from '@/lib/server/session';
-import { ledgerStoreFor } from '@/lib/server/cookieLedger';
+import { ledgerStore } from '@/lib/server/ledger';
+import { getDb, getTopupAt, setTopupAt } from '@callit/db';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -26,8 +27,15 @@ export async function POST(req: NextRequest) {
   if (!session) return NextResponse.json({ error: 'no session' }, { status: 401 });
 
   const now = Date.now();
-  if (session.lastTopupAt && now - session.lastTopupAt < DAY_MS) {
-    const hours = Math.ceil((DAY_MS - (now - session.lastTopupAt)) / 3600_000);
+  // account-level limit first (DB — follows the account across web/Mini App),
+  // sealed-cookie timestamp as the no-DB fallback, IP throttle last
+  const db = getDb();
+  const accountLast = db
+    ? (await getTopupAt(db, session.address).catch(() => null))?.getTime() ?? null
+    : null;
+  const lastClaim = Math.max(accountLast ?? 0, session.lastTopupAt ?? 0);
+  if (lastClaim && now - lastClaim < DAY_MS) {
+    const hours = Math.ceil((DAY_MS - (now - lastClaim)) / 3600_000);
     return NextResponse.json(
       { error: `daily refill already claimed — next one in ~${hours}h` },
       { status: 429 },
@@ -42,7 +50,7 @@ export async function POST(req: NextRequest) {
   const amount = dusdcToUnits(TOPUP_DUSDC);
   try {
     if (MOCK_FUNDS) {
-      const store = ledgerStoreFor();
+      const store = ledgerStore();
       const state = (await store.load(session.address)) ?? {
         balanceUnits: '0',
         nonce: 0,
@@ -71,6 +79,7 @@ export async function POST(req: NextRequest) {
 
     ipLast.set(ip, now);
     saveSession({ ...session, lastTopupAt: now });
+    if (db) await setTopupAt(db, session.address, new Date(now)).catch(() => {});
     return NextResponse.json({ amountUnits: amount.toString(), amount: unitsToDusdc(amount) });
   } catch (err) {
     return NextResponse.json(

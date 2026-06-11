@@ -1,6 +1,6 @@
 import { and, desc, eq, gte, sql } from 'drizzle-orm';
 import type { Db } from './client.js';
-import { badges, picks, streaks, users } from './schema.js';
+import { badges, ledgers, picks, streaks, users } from './schema.js';
 import { applyResult, earnedBadges, type BadgeType, type PickResult } from './streaks.js';
 
 /**
@@ -200,4 +200,84 @@ export async function chatIdFor(db: Db, userId: string): Promise<number | null> 
 export async function userByManagerId(db: Db, managerId: string): Promise<string | null> {
   const [user] = await db.select().from(users).where(eq(users.managerId, managerId)).limit(1);
   return user?.id ?? null;
+}
+
+// ── Mini App account continuity ───────────────────────────────────────
+
+export interface AccountRow {
+  id: string;
+  managerId: string | null;
+  sessionKeySealed: string | null;
+  tgChatId: number | null;
+  lastTopupAt: Date | null;
+}
+
+export async function userByTgId(db: Db, tgId: number): Promise<AccountRow | null> {
+  const [row] = await db.select().from(users).where(eq(users.tgChatId, tgId)).limit(1);
+  if (!row) return null;
+  return {
+    id: row.id,
+    managerId: row.managerId,
+    sessionKeySealed: row.sessionKeySealed,
+    tgChatId: row.tgChatId,
+    lastTopupAt: row.lastTopupAt,
+  };
+}
+
+/** Full account upsert used at registration (web or Mini App). */
+export async function upsertAccount(
+  db: Db,
+  account: {
+    id: string;
+    managerId: string | null;
+    tgChatId?: number;
+    sessionKeySealed?: string;
+    referrerId?: string;
+  },
+): Promise<void> {
+  await db
+    .insert(users)
+    .values(account)
+    .onConflictDoUpdate({
+      target: users.id,
+      set: {
+        managerId: account.managerId,
+        ...(account.tgChatId !== undefined ? { tgChatId: account.tgChatId } : {}),
+        ...(account.sessionKeySealed !== undefined
+          ? { sessionKeySealed: account.sessionKeySealed }
+          : {}),
+      },
+    });
+}
+
+export async function getTopupAt(db: Db, userId: string): Promise<Date | null> {
+  const [row] = await db
+    .select({ at: users.lastTopupAt })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  return row?.at ?? null;
+}
+
+export async function setTopupAt(db: Db, userId: string, at: Date): Promise<void> {
+  await db.update(users).set({ lastTopupAt: at }).where(eq(users.id, userId));
+}
+
+// ── DB-backed mock ledger (account-scoped, device-independent) ────────
+
+export async function loadLedger(db: Db, userId: string): Promise<unknown | null> {
+  const [row] = await db.select().from(ledgers).where(eq(ledgers.userId, userId)).limit(1);
+  return row?.state ?? null;
+}
+
+export async function saveLedger(db: Db, userId: string, state: unknown): Promise<void> {
+  await db
+    .insert(ledgers)
+    .values({ userId, state, updatedAt: new Date() })
+    .onConflictDoUpdate({ target: ledgers.userId, set: { state, updatedAt: new Date() } });
+}
+
+/** Detach a tg id from a legacy row (unusable key) so it can re-register. */
+export async function clearTgBinding(db: Db, tgId: number): Promise<void> {
+  await db.update(users).set({ tgChatId: null }).where(eq(users.tgChatId, tgId));
 }

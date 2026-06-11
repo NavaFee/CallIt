@@ -146,6 +146,15 @@ pnpm cli roundtrip                   # 1 dUSDC mint → position read → redeem
 
 dUSDC is a gated testnet asset — request it from the DeepBook team, then fund the address printed by `pnpm cli wallet`.
 
+## Telegram Mini App
+
+CallIt also ships as a **Telegram Mini App**: open [t.me/callit_notify_bot/play](https://t.me/callit_notify_bot/play) and you're playing inside Telegram — no browser, no install.
+
+- Login is the signed `initData` from Telegram itself, verified server-side with the official bot-token HMAC (24h window, hard-reject on any mismatch). No passwords, no extra taps.
+- The same account follows you between the web app and the Mini App: bind once and your wallet, manager, balance, streaks and badges are shared.
+- Native chrome where it counts: Telegram's MainButton is the LOCK IT IN button, settlements fire haptics, and closing the app warns you while a call is live.
+- Settlement DMs' share buttons deep-link back into the Mini App, carrying the sharer as referrer.
+
 ## Testing
 
 | Layer | Tool | Coverage |
@@ -153,7 +162,7 @@ dUSDC is a gated testnet asset — request it from the DeepBook team, then fund 
 | Unit (38) | Vitest | fixed-point math, strike grid, oracle fuse, mock trading + settlement at real prices, streak machine, badges, bot cards |
 | Chain integration | Vitest (`RUN_CHAIN_TESTS=1`) | real testnet mint → on-chain position read → redeem (manual CI workflow) |
 | Bot | grammY `handleUpdate` injection | binding deep links, settlement cards — no Telegram servers |
-| E2E (2) | Playwright | register → bet → hold-to-cash-out → leaderboard/profile; forced stale-oracle fuse |
+| E2E (4) | Playwright | web journey (register → bet → cash-out → leaderboard); stale-oracle fuse; Mini App journey with signed mock initData; forged initData rejection |
 
 ```bash
 pnpm -r test                          # all unit suites

@@ -3,6 +3,7 @@ import {
   boolean,
   index,
   integer,
+  jsonb,
   pgTable,
   text,
   timestamp,
@@ -22,6 +23,12 @@ export const users = pgTable(
     managerId: text('manager_id'),
     tgChatId: bigint('tg_chat_id', { mode: 'number' }),
     tgBindCode: text('tg_bind_code'),
+    /** AES-GCM-sealed session key — lets the same account open on web and
+     * the Telegram Mini App (dev auth provider only; Enoki replaces this) */
+    sessionKeySealed: text('session_key_sealed'),
+    /** startapp referrer captured at signup (future invite rewards hook) */
+    referrerId: text('referrer_id'),
+    lastTopupAt: timestamp('last_topup_at'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
   (t) => [uniqueIndex('users_tg_chat_idx').on(t.tgChatId)],
@@ -73,3 +80,12 @@ export const badges = pgTable(
   },
   (t) => [uniqueIndex('badges_user_type_idx').on(t.userId, t.type)],
 );
+
+/** Mock-ledger state per account — shared across web and Mini App sessions. */
+export const ledgers = pgTable('ledgers', {
+  userId: text('user_id')
+    .references(() => users.id)
+    .primaryKey(),
+  state: jsonb('state').notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
