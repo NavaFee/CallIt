@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { api, type PositionWire } from '@/lib/api';
 import { fixedToUsdNum, fmtDusdcUnits, fmtUsd, shortAddr } from '@/lib/format';
 import { StreakFlame } from './StreakFlame';
+import { WalletSheet } from './WalletSheet';
 
 const BADGES = [
   { type: 'first', name: 'First Call', description: 'Place your first call', glyph: '▲' },
@@ -48,6 +49,7 @@ function BadgeCoin({ unlocked, glyph, size = 46 }: { unlocked: boolean; glyph: s
 
 export function ProfileScreen({ address }: { address: string | null }) {
   const [stats, setStats] = useState<Stats | null>(null);
+  const [walletOpen, setWalletOpen] = useState(false);
   const [history, setHistory] = useState<PositionWire[]>([]);
 
   useEffect(() => {
@@ -61,8 +63,13 @@ export function ProfileScreen({ address }: { address: string | null }) {
 
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col gap-3 px-4 pb-28 pt-4" data-testid="profile-screen">
-      {/* identity */}
-      <div className="flex items-center gap-3 rounded-3xl border border-line bg-card p-4">
+      {/* identity — tap for the full wallet sheet */}
+      <button
+        type="button"
+        onClick={() => setWalletOpen(true)}
+        className="ci-pressable flex items-center gap-3 rounded-3xl border border-line bg-card p-4 text-left"
+        data-testid="profile-wallet-card"
+      >
         <div
           className="flex h-[54px] w-[54px] items-center justify-center rounded-full font-display text-[22px] text-[#04203D]"
           style={{ background: 'linear-gradient(180deg, #8FC6FF, #4DA2FF)' }}
@@ -74,7 +81,9 @@ export function ProfileScreen({ address }: { address: string | null }) {
           <div className="num text-[11px] font-bold text-muted">{address ? shortAddr(address) : '—'}</div>
         </div>
         {stats && stats.streak.current > 0 && <StreakFlame streak={stats.streak.current} />}
-      </div>
+        <span className="text-[18px] text-muted">›</span>
+      </button>
+      <WalletSheet open={walletOpen} onClose={() => setWalletOpen(false)} />
 
       {/* stats grid */}
       <div className="grid grid-cols-2 gap-2.5">

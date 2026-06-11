@@ -25,6 +25,8 @@ export interface Session {
   managerId: string | null;
   createdAt: number;
   provider: 'dev';
+  /** last daily-refill claim (ms) — rate limit lives in the sealed cookie */
+  lastTopupAt?: number;
 }
 
 export { WELCOME_DUSDC } from '../welcome';

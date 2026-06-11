@@ -8,6 +8,8 @@ export interface SizedTrade {
   costUnits: bigint;
   /** effective ask (cost/quantity), 1e9 fixed-point */
   askPrice: bigint;
+  /** what an immediate redeem of the same quantity returns (bid side) */
+  redeemUnits: bigint;
 }
 
 /**
@@ -31,13 +33,13 @@ export async function sizeStake(
   let quantity = stakeToQuantity(stakeUnits, probeAsk);
   if (quantity <= 0n) throw new Error('stake too small for current ask');
 
-  let { mintCost } = await predict.getTradeAmounts(market, quantity);
+  let { mintCost, redeemPayout } = await predict.getTradeAmounts(market, quantity);
   if (mintCost > stakeUnits) {
     quantity = (quantity * stakeUnits) / mintCost;
     if (quantity <= 0n) throw new Error('stake too small for current ask');
-    ({ mintCost } = await predict.getTradeAmounts(market, quantity));
+    ({ mintCost, redeemPayout } = await predict.getTradeAmounts(market, quantity));
   }
 
   const askPrice = quantity > 0n ? (mintCost * 1_000_000_000n) / quantity : 0n;
-  return { quantityUnits: quantity, costUnits: mintCost, askPrice };
+  return { quantityUnits: quantity, costUnits: mintCost, askPrice, redeemUnits: redeemPayout };
 }

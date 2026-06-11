@@ -4,7 +4,7 @@
 
 Pick UP or DOWN on BTC, stake dUSDC, and get paid the moment the oracle settles — no wallet extension, no seed phrase, no gas popups. Every multiplier on screen is priced by the protocol's live SVI volatility surface, and a keeper claims winnings for you automatically.
 
-🌐 **Play now: [callit-seven.vercel.app](https://callit-seven.vercel.app)** (→ callit.markets) · [Landing](https://callit-seven.vercel.app/welcome) · Sui testnet
+🌐 **Play now: [callit-seven.vercel.app/play](https://callit-seven.vercel.app/play)** · [Landing](https://callit-seven.vercel.app) (→ callit.markets) · Sui testnet
 
 <p align="center">
   <img src="docs/screenshots/play-mobile.png" width="260" alt="Play screen — live 15-minute BTC calls" />
@@ -13,6 +13,25 @@ Pick UP or DOWN on BTC, stake dUSDC, and get paid the moment the oracle settles 
 <p align="center">
   <img src="docs/screenshots/desktop-hud.png" width="640" alt="Desktop HUD" />
 </p>
+
+## Don't trust it — click it
+
+Every flow below is a real DeepBook Predict transaction on Sui testnet:
+
+| Flow | Entry point | Proof |
+|---|---|---|
+| Account creation | `predict::create_manager` | [tx ↗](https://suiscan.xyz/testnet/tx/BGtfqMr69vS3wg2jMaS4cQ7DgMgnawRForTnEJkRCVtB) |
+| $10 call minted | `predict::mint` (deposit + mint, one PTB) | [tx ↗](https://suiscan.xyz/testnet/tx/B2SyPtz14h41pBgKGbCZcQWxdDd1uNcMoUvwQ3DtN6sJ) |
+| Early cash-out | `predict::redeem` at the live bid | [tx ↗](https://suiscan.xyz/testnet/tx/7VZ7CtAcpJTNupwQgDRfFnuPkQNR4LZdsyCfgSkVdk2o) |
+| Keeper auto-claim | `predict::redeem_permissionless` (executor ≠ owner) | [tx ↗](https://suiscan.xyz/testnet/tx/35txXpaBp2kPKAQk7zP9s8h5DWGhKEmvFkLZEuCp1GMz) |
+| Live trading account | `PredictManager` shared object | [object ↗](https://suiscan.xyz/testnet/object/0xfa7390c9eb0329e7abac5e043afc08398c05c5de9c736e3554350c8929442012) |
+
+## What this is — and isn't
+
+- **Testnet only, play money.** dUSDC is a gated test asset; nothing here is financial advice or a real-money product.
+- **BTC only, for now.** The protocol's oracle set defines the markets; new underlyings appear automatically when activated.
+- **The spread is real and shown.** Mint at ask, redeem at bid — the bet panel displays the round-trip spread before you lock in. The house edge is the protocol's pricing, not ours.
+- **Mainnet depends on DeepBook Predict's mainnet timeline.** Our side is a config swap (see below); the protocol team owns the launch date.
 
 ## Why this exists
 
@@ -91,7 +110,7 @@ One protocol subtlety: `create_manager` shares the `PredictManager` inside Move,
 
 ```
 callit-app/
-├── apps/web        # Next.js PWA + ≥1024px desktop HUD + /welcome landing
+├── apps/web        # Next.js PWA (/play) + desktop HUD + landing (/)
 ├── apps/worker     # keeper (settlement watch → permissionless redeem) + Telegram bot
 ├── packages/core   # codegen bindings, PredictService, TradingPort (mock⇄real), CLI
 ├── packages/db     # Drizzle schema, streak machine, badges, weekly leaderboard

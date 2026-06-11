@@ -1,6 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   transpilePackages: ['@callit/core', '@callit/db'],
+  async redirects() {
+    return [{ source: '/welcome', destination: '/', permanent: true }];
+  },
   webpack: (config) => {
     // @callit/core uses NodeNext-style `.js` specifiers in TS source
     config.resolve.extensionAlias = {

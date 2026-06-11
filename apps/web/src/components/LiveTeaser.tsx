@@ -67,7 +67,7 @@ export function LiveTeaser() {
         </div>
       </div>
       <div className="flex-1" />
-      <a href="/" className="text-[15px] font-black text-gold">
+      <a href="/play" className="text-[15px] font-black text-gold">
         Join the round →
       </a>
     </div>

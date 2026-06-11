@@ -16,7 +16,7 @@ async function balanceOf(page: import('@playwright/test').Page): Promise<number>
 }
 
 test('register → bet → cash out → leaderboard', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/play');
 
   // ── onboarding: one tap to a funded account ──────────────────────
   await expect(page.getByTestId('onboarding')).toBeVisible();
@@ -92,7 +92,7 @@ test('oracle fuse: stale feeds disable betting', async ({ page }) => {
     }
   });
 
-  await page.goto('/');
+  await page.goto('/play');
   const claim = page.getByTestId('claim-button');
   if (await claim.isVisible().catch(() => false)) {
     await claim.click();

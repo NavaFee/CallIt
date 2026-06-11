@@ -23,7 +23,7 @@ export default function NotFound() {
         This one settled out of the money — the chart is still waiting for you.
       </p>
       <Link
-        href="/"
+        href="/play"
         className="ci-pressable mt-8 inline-flex h-[56px] items-center rounded-[18px] px-8 font-ui text-[17px] font-black text-[#3A2700]"
         style={{
           background: 'linear-gradient(180deg, #FFE08A 0%, #FFC53D 42%)',

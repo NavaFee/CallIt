@@ -151,6 +151,23 @@ export class PredictService {
     return tx;
   }
 
+  /**
+   * Withdraw free quote balance from the manager back to the owner's wallet.
+   * Owner-only on-chain; the withdrawn Coin is transferred to `recipient`
+   * (defaults to the manager owner via tx sender).
+   */
+  buildManagerWithdrawTx(opts: { managerId: string; amountUnits: bigint; recipient: string }): Transaction {
+    const tx = new Transaction();
+    const coin = tx.add(
+      predictManager.withdraw({
+        arguments: [tx.object(opts.managerId), opts.amountUnits],
+        typeArguments: [this.cfg.dusdcCoinType],
+      }),
+    );
+    tx.transferObjects([coin], opts.recipient);
+    return tx;
+  }
+
   private addMarketKey(tx: Transaction, market: MarketParams) {
     return tx.add(
       marketKey._new({

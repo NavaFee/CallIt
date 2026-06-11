@@ -95,6 +95,8 @@ export interface SideQuote {
   multiplier: number;
   quantityUnits: string;
   costUnits: string;
+  /** immediate-redeem value of the same position (bid side) */
+  redeemUnits: string;
 }
 
 /** Two-sided ATM quote at the protocol's live pricing for a given stake. */
@@ -125,6 +127,7 @@ export async function quoteBothSides(oracleId: string, stakeUnits: bigint): Prom
       multiplier: payoutMultiplier(sized.askPrice),
       quantityUnits: sized.quantityUnits.toString(),
       costUnits: sized.costUnits.toString(),
+      redeemUnits: sized.redeemUnits.toString(),
     };
   };
 

@@ -12,6 +12,7 @@ import { Onboarding } from './Onboarding';
 import { OpenCallCard, type EnrichedPosition } from './OpenCalls';
 import { ResultOverlay, type ResultData } from './ResultOverlay';
 import { Sparkline } from './Sparkline';
+import { WalletSheet } from './WalletSheet';
 import { StreakFlame } from './StreakFlame';
 import { useToast } from './Toast';
 
@@ -51,6 +52,7 @@ export function PlayScreen() {
   const announced = useRef(new Set<string>());
   const [offline, setOffline] = useState(0);
   const [refueling, setRefueling] = useState(false);
+  const [walletOpen, setWalletOpen] = useState(false);
   // bumped on every mutation; stale poll responses are dropped
   const balanceVersion = useRef(0);
 
@@ -324,15 +326,24 @@ export function PlayScreen() {
         </div>
         {session && (
           <div className="flex items-center gap-2">
-            <span className="rounded-full border border-line bg-card px-3 py-1.5 text-[13px] font-black">
+            <button
+              type="button"
+              onClick={() => setWalletOpen(true)}
+              className="ci-pressable rounded-full border border-line bg-card px-3 py-1.5 text-[13px] font-black"
+              data-testid="wallet-chip"
+            >
               <span className="num text-gold" data-testid="balance">
                 {fmtDusdcUnits(balanceUnits)}
               </span>{' '}
               <span className="text-[10px] text-muted">dUSDC</span>
-            </span>
-            <span className="rounded-full border border-line bg-card px-2.5 py-1.5 text-[10px] font-bold text-muted">
+            </button>
+            <button
+              type="button"
+              onClick={() => setWalletOpen(true)}
+              className="ci-pressable rounded-full border border-line bg-card px-2.5 py-1.5 text-[10px] font-bold text-muted"
+            >
               {shortAddr(session.address)}
-            </span>
+            </button>
           </div>
         )}
       </header>
@@ -382,6 +393,48 @@ export function PlayScreen() {
           <div className="font-display text-[15px] text-sui">PRACTICE STACK IS REFUELING</div>
           <div className="text-[11px] font-bold text-muted">
             The faucet pool is topping up — ping us on Telegram and we’ll fund you by hand
+          </div>
+        </div>
+      )}
+
+      {/* broke state: deposit or claim the daily refill */}
+      {session && !refueling && BigInt(balanceUnits) < 1_000_000n && placing == null && (
+        <div
+          className="rounded-2xl border px-4 py-3"
+          style={{ borderColor: 'rgba(255,197,61,0.5)', background: 'rgba(255,197,61,0.06)' }}
+          data-testid="topup-card"
+        >
+          <div className="font-display text-[15px] text-gold">OUT OF AMMO</div>
+          <div className="mt-0.5 text-[11px] font-bold text-muted">
+            Deposit dUSDC to your address, or grab the once-a-day refill.
+          </div>
+          <div className="mt-2.5 flex gap-2">
+            <button
+              type="button"
+              className="ci-pressable flex-1 rounded-xl border border-line bg-white/[0.05] py-2 text-[12px] font-black"
+              onClick={() => setWalletOpen(true)}
+            >
+              DEPOSIT
+            </button>
+            <button
+              type="button"
+              className="ci-pressable flex-1 rounded-xl py-2 text-[12px] font-black text-[#3A2700]"
+              style={{ background: 'linear-gradient(180deg, #FFE08A, var(--gold) 42%)', boxShadow: '0 3px 0 var(--gold-deep)' }}
+              data-testid="topup-claim"
+              onClick={async () => {
+                try {
+                  const res = await fetch('/api/topup', { method: 'POST' });
+                  const data = (await res.json()) as { amount?: number; error?: string };
+                  if (!res.ok) throw new Error(data.error ?? 'refill failed');
+                  toast.push('money', `+${data.amount?.toFixed(2)} dUSDC daily refill`);
+                  refreshPositions();
+                } catch (err) {
+                  toast.push('error', err instanceof Error ? err.message : 'refill failed');
+                }
+              }}
+            >
+              CLAIM 5 dUSDC
+            </button>
           </div>
         </div>
       )}
@@ -524,6 +577,19 @@ export function PlayScreen() {
                 </span>
               )}
             </ChunkyButton>
+            {quote && (
+              <div className="mt-2 text-center text-[10px] font-bold text-muted">
+                protocol round-trip spread ≈{' '}
+                <span className="num">
+                  {(
+                    (Number(BigInt(quote[picked].costUnits) - BigInt(quote[picked].redeemUnits)) /
+                      Math.max(Number(quote[picked].costUnits), 1)) * 100
+                  ).toFixed(1)}
+                  %
+                </span>{' '}
+                · what you'd lose exiting this second
+              </div>
+            )}
           </div>
         )}
       </section>
@@ -545,6 +611,7 @@ export function PlayScreen() {
       )}
 
       {/* overlays */}
+      <WalletSheet open={walletOpen} onClose={() => setWalletOpen(false)} />
       {result && <ResultOverlay result={result} onClose={() => setResult(null)} />}
       {session === null && <Onboarding onClaim={claim} />}
       </div>
