@@ -72,6 +72,25 @@ describe('notify bot', () => {
     expect(String(sent[0]!.payload.text)).toContain('expired');
     spy.mockRestore();
   });
+
+  it('binds a one-click login nonce on /start login_<nonce>', async () => {
+    const social = await import('@callit/db');
+    const spy = vi.spyOn(social, 'bindLoginNonce').mockResolvedValue('bound');
+    const { bot, sent } = captureBot({} as Db);
+    await bot.handleUpdate(makeUpdate('/start login_abc123'));
+    expect(spy).toHaveBeenCalledWith(expect.anything(), 'abc123', 777, undefined);
+    expect(String(sent[0]!.payload.text)).toContain('Logging you in');
+    spy.mockRestore();
+  });
+
+  it('reports an expired/used login nonce', async () => {
+    const social = await import('@callit/db');
+    const spy = vi.spyOn(social, 'bindLoginNonce').mockResolvedValue('invalid');
+    const { bot, sent } = captureBot({} as Db);
+    await bot.handleUpdate(makeUpdate('/start login_stale'));
+    expect(String(sent[0]!.payload.text)).toContain('expired');
+    spy.mockRestore();
+  });
 });
 
 describe('settlement cards', () => {

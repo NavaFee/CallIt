@@ -34,10 +34,33 @@ export const users = pgTable(
     /** startapp referrer captured at signup (future invite rewards hook) */
     referrerId: text('referrer_id'),
     lastTopupAt: timestamp('last_topup_at'),
+    /** most recent settlement the player has actually seen (server-authoritative
+     * so the revisit replay survives cleared cookies and is device-consistent) */
+    lastSeenSettlementAt: timestamp('last_seen_settlement_at'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
   (t) => [uniqueIndex('users_tg_chat_idx').on(t.tgChatId)],
 );
+
+/**
+ * One-time bot-login nonces. The web mints one (POST /api/tg-login-start),
+ * the player deep-links into the bot which binds the nonce to their (trusted,
+ * message-derived) tg id, then the web polls and completes the login. TTL +
+ * single-use are enforced in consumeLoginNonce.
+ */
+export const loginNonces = pgTable('login_nonces', {
+  nonce: text('nonce').primaryKey(),
+  /** the guest session that started the flow, for 'link' mode (nullable) */
+  originAddress: text('origin_address'),
+  mode: text('mode', { enum: ['login', 'link'] })
+    .default('login')
+    .notNull(),
+  /** set by the bot (or the initData bind path) once the player authorises */
+  tgChatId: bigint('tg_chat_id', { mode: 'number' }),
+  tgUsername: text('tg_username'),
+  consumed: boolean('consumed').default(false).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
 
 export const picks = pgTable(
   'picks',

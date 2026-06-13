@@ -14,7 +14,7 @@ import { ResultOverlay, type ResultData } from './ResultOverlay';
 import { Sparkline } from './Sparkline';
 import { WalletSheet } from './WalletSheet';
 import { tgWebApp } from '@/lib/tg';
-import { telegramAuth, type TgWidgetConfig } from '@/lib/tgAuth';
+import { telegramLogin as runTgLogin, type TgWidgetConfig } from '@/lib/tgAuth';
 import { StreakFlame } from './StreakFlame';
 import { useToast } from './Toast';
 
@@ -30,6 +30,16 @@ const BADGE_NAMES: Record<string, string> = {
 const MARKET_POLL_MS = 4_000;
 const QUOTE_POLL_MS = 5_000;
 const POSITIONS_POLL_MS = 12_000;
+
+interface UnseenWire {
+  id: string;
+  isUp: boolean;
+  strike: string;
+  costUnits: string;
+  payoutUnits: string;
+  won: boolean;
+  settledAt: number;
+}
 
 export function PlayScreen() {
   const toast = useToast();
@@ -52,6 +62,8 @@ export function PlayScreen() {
   const settling = useRef(false);
   // real-mode settle events repeat until the keeper claims — announce once
   const announced = useRef(new Set<string>());
+  // settledAt to ack once the current overlay (a revisit replay) is dismissed
+  const pendingSeenAck = useRef<number | null>(null);
   const [offline, setOffline] = useState(0);
   const [refueling, setRefueling] = useState(false);
   const [walletOpen, setWalletOpen] = useState(false);
@@ -118,6 +130,28 @@ export function PlayScreen() {
           setTgLinked(res.tgLinked ?? false);
           if (res.session) {
             api.profile().then((p) => setStreak(p.stats?.streak.current ?? 0)).catch(() => {});
+            // revisit replay: catch up on calls that auto-settled while away —
+            // replay only the most recent, count the rest in one toast
+            fetch('/api/settlements/unseen')
+              .then((r) => r.json())
+              .then((u: { settlements?: UnseenWire[]; balanceUnits?: string }) => {
+                const list = u.settlements ?? [];
+                if (list.length === 0) return;
+                const top = list[0]!;
+                pendingSeenAck.current = list.reduce((m, s) => Math.max(m, s.settledAt), 0);
+                setResult({
+                  kind: top.won ? 'won' : 'lost',
+                  payoutUnits: top.payoutUnits,
+                  costUnits: top.costUnits,
+                  strikeUsd: fixedToUsdNum(top.strike),
+                  isUp: top.isUp,
+                  balanceUnits: u.balanceUnits ?? '0',
+                });
+                if (list.length > 1) {
+                  toast.push('money', `+${list.length - 1} more settled while you were away`);
+                }
+              })
+              .catch(() => {});
           }
         })
         .catch(() => setSession(null));
@@ -256,6 +290,14 @@ export function PlayScreen() {
           announceBadges(s.newBadges);
           if (s.streak) setStreak(s.streak.current);
         }
+        // seen live — don't replay these on the next visit
+        if (fresh.length > 0) {
+          fetch('/api/settlements/seen', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ at: Date.now() }),
+          }).catch(() => {});
+        }
         refreshPositions();
       })
       .catch(() => {})
@@ -289,8 +331,8 @@ export function PlayScreen() {
   const telegramLogin = useCallback(async () => {
     if (!tgWidget) return;
     try {
-      const res = await telegramAuth(tgWidget, 'login');
-      if (!res) return; // user closed the popup
+      const res = await runTgLogin('login');
+      if (!res) return; // user closed Telegram / link expired
       const fresh = await api.session();
       setSession(fresh.session);
       if (fresh.balanceUnits) setBalanceUnits(fresh.balanceUnits);
@@ -310,6 +352,17 @@ export function PlayScreen() {
   // one-shot post-settlement nudge for guests (shows once, ever)
   const closeResult = useCallback(() => {
     setResult(null);
+    // if this overlay was a revisit replay, advance the server-side marker so
+    // it never replays again (device-consistent, survives cleared cookies)
+    if (pendingSeenAck.current != null) {
+      const at = pendingSeenAck.current;
+      pendingSeenAck.current = null;
+      fetch('/api/settlements/seen', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ at }),
+      }).catch(() => {});
+    }
     if (isTg || tgLinked || !tgWidget) return;
     try {
       if (localStorage.getItem('callit_link_nudge_done')) return;
@@ -336,7 +389,7 @@ export function PlayScreen() {
   const linkTelegram = useCallback(async (): Promise<boolean> => {
     if (!tgWidget) return false;
     try {
-      const res = await telegramAuth(tgWidget, 'link');
+      const res = await runTgLogin('link');
       if (!res) return false;
       setTgLinked(true);
       setNudge(false);

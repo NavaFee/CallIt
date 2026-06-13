@@ -1,60 +1,16 @@
 'use client';
 
 /**
- * Telegram Login Widget driver (web only — the Mini App logs in silently
- * via initData). Uses the JS-API flavor of the official widget so the
- * buttons stay ours; Telegram.Login.auth opens the oauth.telegram.org
- * popup and hands back a signed payload the server re-verifies.
- *
- * Requires the bot's domain to be registered with @BotFather (/setdomain);
- * config (bot id) is served by GET /api/session, no public env needed.
+ * Bot one-click login (replaces the phone-number Login Widget — and with it
+ * the BotFather /setdomain requirement). The server mints a one-time nonce,
+ * the player deep-links into the bot which binds it from the trusted message,
+ * and we poll until the session is issued.
  */
 
+/** Availability + bot handle, served by GET /api/session as `tgWidget`. */
 export interface TgWidgetConfig {
   botId: string;
   botUsername: string;
-}
-
-interface TelegramLoginGlobal {
-  Login?: {
-    auth: (
-      opts: { bot_id: string; request_access?: boolean },
-      cb: (user: Record<string, unknown> | false) => void,
-    ) => void;
-  };
-}
-
-const WIDGET_SRC = 'https://telegram.org/js/telegram-widget.js?22';
-let widgetLoading: Promise<void> | null = null;
-
-function loadWidgetScript(): Promise<void> {
-  if ((window as unknown as { Telegram?: TelegramLoginGlobal }).Telegram?.Login) {
-    return Promise.resolve();
-  }
-  if (!widgetLoading) {
-    widgetLoading = new Promise((resolve, reject) => {
-      const el = document.createElement('script');
-      el.src = WIDGET_SRC;
-      el.async = true;
-      el.onload = () => resolve();
-      el.onerror = () => {
-        widgetLoading = null;
-        reject(new Error('Telegram widget failed to load'));
-      };
-      document.head.appendChild(el);
-    });
-  }
-  return widgetLoading;
-}
-
-/** Resolves with the signed widget payload, or null if the user backed out. */
-async function widgetAuth(botId: string): Promise<Record<string, unknown> | null> {
-  await loadWidgetScript();
-  const tg = (window as unknown as { Telegram?: TelegramLoginGlobal }).Telegram;
-  if (!tg?.Login) throw new Error('Telegram widget unavailable');
-  return new Promise((resolve) => {
-    tg.Login!.auth({ bot_id: botId, request_access: false }, (user) => resolve(user || null));
-  });
 }
 
 export interface TgLoginResult {
@@ -66,24 +22,60 @@ export interface TgLoginResult {
   airdropFailed: boolean;
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 /**
- * Full widget round-trip: popup → server verify → cookie write.
- * Returns null when the user closed the popup without authorizing.
- * Throws with the server's message on conflict (409) and other failures.
+ * Returns the login result, or null if the player never completes it (closed
+ * Telegram, or the link expired). Throws an Error with `.code ===
+ * 'tg-already-bound'` on a link conflict so callers can offer the switch flow.
  */
-export async function telegramAuth(
-  widget: TgWidgetConfig,
-  mode: 'login' | 'link',
-): Promise<TgLoginResult | null> {
-  const user = await widgetAuth(widget.botId);
-  if (!user) return null;
-  const res = await fetch('/api/tg-login', {
+export async function telegramLogin(mode: 'login' | 'link'): Promise<TgLoginResult | null> {
+  const start = await fetch('/api/tg-login-start', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ user, mode }),
+    body: JSON.stringify({ mode }),
   });
-  const data = (await res.json().catch(() => ({}))) as TgLoginResult & { error?: string };
-  if (!res.ok) throw new Error(data.error ?? `telegram ${mode} failed`);
-  window.dispatchEvent(new CustomEvent('callit:session-changed'));
-  return data;
+  const s = (await start.json().catch(() => ({}))) as {
+    nonce?: string;
+    deepLink?: string;
+    error?: string;
+  };
+  if (!start.ok || !s.nonce || !s.deepLink) {
+    throw new Error(s.error ?? 'Telegram login unavailable');
+  }
+
+  // opens the Telegram app / web; the player taps Start and the bot binds it
+  window.open(s.deepLink, '_blank');
+
+  // poll for ~3 min (nonce TTL is 5 min server-side)
+  for (let i = 0; i < 90; i++) {
+    await sleep(2000);
+    let res: Response;
+    try {
+      res = await fetch('/api/tg-login-poll', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ nonce: s.nonce }),
+      });
+    } catch {
+      continue; // transient network — keep polling
+    }
+    if (res.status === 409) {
+      const d = (await res.json().catch(() => ({}))) as { error?: string; code?: string };
+      const err = new Error(d.error ?? 'This Telegram is already linked to another account') as Error & {
+        code?: string;
+      };
+      err.code = d.code;
+      throw err;
+    }
+    if (res.status === 410) return null; // expired or already used
+    if (!res.ok) continue;
+    const d = (await res.json().catch(() => ({}))) as TgLoginResult & { pending?: boolean };
+    if (d.pending) continue;
+    if (d.session) {
+      window.dispatchEvent(new CustomEvent('callit:session-changed'));
+      return d;
+    }
+  }
+  return null;
 }

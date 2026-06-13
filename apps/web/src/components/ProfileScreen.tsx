@@ -6,7 +6,7 @@ import { fixedToUsdNum, fmtDusdcUnits, fmtUsd, shortAddr } from '@/lib/format';
 import { StreakFlame } from './StreakFlame';
 import { WalletSheet } from './WalletSheet';
 import { tgWebApp } from '@/lib/tg';
-import { telegramAuth, type TgWidgetConfig } from '@/lib/tgAuth';
+import { telegramLogin, type TgWidgetConfig } from '@/lib/tgAuth';
 
 const BADGES = [
   { type: 'first', name: 'First Call', description: 'Place your first call', glyph: '▲' },
@@ -76,7 +76,7 @@ export function ProfileScreen({ address }: { address: string | null }) {
     // widget first (instant bind), bot deep link as the fallback
     if (tgWidget) {
       try {
-        const res = await telegramAuth(tgWidget, 'link');
+        const res = await telegramLogin('link');
         if (res) {
           setTgLinked(true);
           setTgUsername(res.username);

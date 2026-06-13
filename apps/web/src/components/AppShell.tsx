@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { tgWebApp } from '@/lib/tg';
-import { telegramAuth, type TgWidgetConfig } from '@/lib/tgAuth';
+import { telegramLogin, type TgWidgetConfig } from '@/lib/tgAuth';
 import { PlayScreen } from './PlayScreen';
 import { ProfileScreen } from './ProfileScreen';
 import { RanksScreen } from './RanksScreen';
@@ -70,7 +70,7 @@ export function AppShell() {
             data-testid="guest-banner-link"
             onClick={() => {
               if (!tgWidget) return;
-              telegramAuth(tgWidget, 'link')
+              telegramLogin('link')
                 .then((res) => res && setTgLinked(true))
                 .catch(() => {});
             }}

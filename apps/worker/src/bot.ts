@@ -1,6 +1,14 @@
 import { Bot, InlineKeyboard, InputFile, type Api, type RawApi } from 'grammy';
 import type { UserFromGetMe } from 'grammy/types';
-import { bindTelegram, chatIdFor, getDb, lastCardByTgId, setLastCard, type Db } from '@callit/db';
+import {
+  bindLoginNonce,
+  bindTelegram,
+  chatIdFor,
+  getDb,
+  lastCardByTgId,
+  setLastCard,
+  type Db,
+} from '@callit/db';
 
 /**
  * CallIt notify bot — notifications only, never custody or trading.
@@ -36,6 +44,21 @@ export function createBot({ token, db, appUrl, botInfo }: BotDeps) {
       await ctx.reply('Binding is unavailable right now (no database configured).');
       return;
     }
+
+    // bot one-click login: the start payload is a web-minted nonce. ctx.from
+    // is message-derived and trusted (no hash needed) — bind it so the web
+    // poll can complete the login.
+    if (code.startsWith('login_')) {
+      const nonce = code.slice('login_'.length);
+      const bound = await bindLoginNonce(db, nonce, ctx.chat.id, ctx.from?.username);
+      await ctx.reply(
+        bound === 'bound'
+          ? '✅ Logging you in — head back to CallIt, your account is loading.'
+          : 'That login link expired — tap “Continue with Telegram” again on CallIt.',
+      );
+      return;
+    }
+
     const userId = await bindTelegram(db, code, ctx.chat.id, ctx.from?.username);
     if (!userId) {
       await ctx.reply('That link expired — grab a fresh one from your CallIt profile.');

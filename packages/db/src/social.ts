@@ -1,6 +1,6 @@
-import { and, desc, eq, gte, sql } from 'drizzle-orm';
+import { and, desc, eq, gt, gte, sql } from 'drizzle-orm';
 import type { Db } from './client.js';
-import { badges, ledgers, picks, streaks, users } from './schema.js';
+import { badges, ledgers, loginNonces, picks, streaks, users } from './schema.js';
 import { applyResult, earnedBadges, type BadgeType, type PickResult } from './streaks.js';
 
 /**
@@ -363,4 +363,117 @@ export async function clearTgBinding(db: Db, tgId: number): Promise<void> {
 export async function allLedgers(db: Db): Promise<Array<{ userId: string; state: unknown }>> {
   const rows = await db.select().from(ledgers);
   return rows.map((r) => ({ userId: r.userId, state: r.state }));
+}
+
+// ── one-time bot-login nonces ─────────────────────────────────────────
+
+const NONCE_TTL_MS = 5 * 60 * 1000;
+
+export async function createLoginNonce(
+  db: Db,
+  nonce: string,
+  originAddress: string | null,
+  mode: 'login' | 'link',
+): Promise<void> {
+  await db.insert(loginNonces).values({ nonce, originAddress, mode });
+}
+
+/** Bot (or initData) side: attach the verified tg identity to a fresh nonce. */
+export async function bindLoginNonce(
+  db: Db,
+  nonce: string,
+  tgChatId: number,
+  tgUsername: string | undefined,
+): Promise<'bound' | 'invalid'> {
+  const [row] = await db.select().from(loginNonces).where(eq(loginNonces.nonce, nonce)).limit(1);
+  if (!row || row.consumed || row.tgChatId != null) return 'invalid';
+  if (Date.now() - row.createdAt.getTime() > NONCE_TTL_MS) return 'invalid';
+  await db
+    .update(loginNonces)
+    .set({ tgChatId, tgUsername: tgUsername ?? null })
+    .where(eq(loginNonces.nonce, nonce));
+  return 'bound';
+}
+
+export type NonceState =
+  | { status: 'gone' | 'expired' | 'consumed' | 'pending' }
+  | {
+      status: 'ready';
+      tgChatId: number;
+      tgUsername: string | null;
+      originAddress: string | null;
+      mode: 'login' | 'link';
+    };
+
+/** Poll side: single-use — the row flips to consumed atomically so two
+ * concurrent polls can never both resolve the same nonce. */
+export async function consumeLoginNonce(db: Db, nonce: string): Promise<NonceState> {
+  const [row] = await db.select().from(loginNonces).where(eq(loginNonces.nonce, nonce)).limit(1);
+  if (!row) return { status: 'gone' };
+  if (row.consumed) return { status: 'consumed' };
+  if (Date.now() - row.createdAt.getTime() > NONCE_TTL_MS) return { status: 'expired' };
+  if (row.tgChatId == null) return { status: 'pending' };
+  const won = await db
+    .update(loginNonces)
+    .set({ consumed: true })
+    .where(and(eq(loginNonces.nonce, nonce), eq(loginNonces.consumed, false)))
+    .returning({ nonce: loginNonces.nonce });
+  if (won.length === 0) return { status: 'consumed' }; // lost the race
+  return {
+    status: 'ready',
+    tgChatId: row.tgChatId,
+    tgUsername: row.tgUsername,
+    originAddress: row.originAddress,
+    mode: row.mode,
+  };
+}
+
+// ── revisit settlement replay (server-authoritative "last seen") ──────
+
+export interface UnseenSettlement {
+  id: string;
+  isUp: boolean;
+  strike: string; // 1e9 fixed
+  costUnits: string;
+  payoutUnits: string;
+  won: boolean;
+  settledAt: number; // ms epoch
+}
+
+/**
+ * Auto-settled calls (won/lost — NOT cash-outs, which the player saw live)
+ * that resolved after their last-seen marker. Most-recent first.
+ */
+export async function unseenSettlements(db: Db, userId: string): Promise<UnseenSettlement[]> {
+  const [u] = await db
+    .select({ at: users.lastSeenSettlementAt })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  const since = u?.at ?? new Date(0);
+  const rows = await db
+    .select()
+    .from(picks)
+    .where(
+      and(
+        eq(picks.userId, userId),
+        sql`${picks.status} in ('won','lost')`,
+        gt(picks.settledAt, since),
+      ),
+    )
+    .orderBy(desc(picks.settledAt))
+    .limit(50);
+  return rows.map((p) => ({
+    id: p.id,
+    isUp: p.isUp,
+    strike: p.strike.toString(),
+    costUnits: p.costUnits.toString(),
+    payoutUnits: (p.payoutUnits ?? 0n).toString(),
+    won: p.status === 'won',
+    settledAt: (p.settledAt ?? p.placedAt).getTime(),
+  }));
+}
+
+export async function markSettlementsSeen(db: Db, userId: string, at: Date): Promise<void> {
+  await db.update(users).set({ lastSeenSettlementAt: at }).where(eq(users.id, userId));
 }
