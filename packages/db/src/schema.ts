@@ -23,6 +23,11 @@ export const users = pgTable(
     managerId: text('manager_id'),
     tgChatId: bigint('tg_chat_id', { mode: 'number' }),
     tgBindCode: text('tg_bind_code'),
+    /** @username captured at bind/login time — shown on the linked card */
+    tgUsername: text('tg_username'),
+    /** last settlement-card photo file_id — reused for inline group shares */
+    lastCardFileId: text('last_card_file_id'),
+    lastCardText: text('last_card_text'),
     /** AES-GCM-sealed session key — lets the same account open on web and
      * the Telegram Mini App (dev auth provider only; Enoki replaces this) */
     sessionKeySealed: text('session_key_sealed'),

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { MOCK_FUNDS, cfg, predictService, suiClient } from '@/lib/server/clients';
 import { getSession } from '@/lib/server/session';
+import { tgLinkState } from '@/lib/server/tgState';
 import { tradingPortFor } from '@/lib/server/trading';
 
 export const runtime = 'nodejs';
@@ -25,11 +26,13 @@ export async function GET() {
     }
   }
 
+  const tg = await tgLinkState(session);
   return NextResponse.json({
     address: session.address,
     managerId: session.managerId,
     coinType: cfg.dusdcCoinType,
     mock: MOCK_FUNDS,
+    tgLinked: tg.linked,
     walletUnits: walletUnits.toString(),
     managerUnits: managerUnits.toString(),
     faucetFormUrl:

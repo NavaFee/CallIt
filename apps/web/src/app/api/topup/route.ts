@@ -5,6 +5,7 @@ import { dusdcToUnits, transferDusdc, unitsToDusdc } from '@callit/core';
 import { MOCK_FUNDS, cfg, suiClient } from '@/lib/server/clients';
 import { getSession, saveSession } from '@/lib/server/session';
 import { ledgerStore } from '@/lib/server/ledger';
+import { tgLinkState } from '@/lib/server/tgState';
 import { getDb, getTopupAt, setTopupAt } from '@callit/db';
 
 export const runtime = 'nodejs';
@@ -25,6 +26,15 @@ const ipLast = new Map<string, number>();
 export async function POST(req: NextRequest) {
   const session = getSession();
   if (!session) return NextResponse.json({ error: 'no session' }, { status: 401 });
+
+  // the refill is the linking incentive: guests deposit or bind, never both gates
+  const tg = await tgLinkState(session);
+  if (!tg.linked) {
+    return NextResponse.json(
+      { error: 'The daily refill is for Telegram-linked accounts — link to claim', code: 'link-telegram' },
+      { status: 403 },
+    );
+  }
 
   const now = Date.now();
   // account-level limit first (DB — follows the account across web/Mini App),

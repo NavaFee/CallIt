@@ -48,7 +48,13 @@ export const api = {
     ),
   quote: (oracleId: string, stakeUnits: string) =>
     request<QuoteResponse>(`/api/quote?oracleId=${oracleId}&stakeUnits=${stakeUnits}`),
-  session: () => request<{ session: PublicSession | null; balanceUnits?: string }>('/api/session'),
+  session: () =>
+    request<{
+      session: PublicSession | null;
+      balanceUnits?: string;
+      tgWidget?: { botId: string; botUsername: string } | null;
+      tgLinked?: boolean;
+    }>('/api/session'),
   register: () =>
     request<{
       session: PublicSession;
@@ -105,6 +111,7 @@ export const api = {
         badges: string[];
       } | null;
       tgLinked?: boolean;
+      tgUsername?: string | null;
       available: boolean;
     }>('/api/profile'),
 };

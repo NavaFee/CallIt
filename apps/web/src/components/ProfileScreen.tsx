@@ -6,6 +6,7 @@ import { fixedToUsdNum, fmtDusdcUnits, fmtUsd, shortAddr } from '@/lib/format';
 import { StreakFlame } from './StreakFlame';
 import { WalletSheet } from './WalletSheet';
 import { tgWebApp } from '@/lib/tg';
+import { telegramAuth, type TgWidgetConfig } from '@/lib/tgAuth';
 
 const BADGES = [
   { type: 'first', name: 'First Call', description: 'Place your first call', glyph: '▲' },
@@ -52,6 +53,8 @@ export function ProfileScreen({ address }: { address: string | null }) {
   const [stats, setStats] = useState<Stats | null>(null);
   const [walletOpen, setWalletOpen] = useState(false);
   const [tgLinked, setTgLinked] = useState(false);
+  const [tgUsername, setTgUsername] = useState<string | null>(null);
+  const [tgWidget, setTgWidget] = useState<TgWidgetConfig | null>(null);
   const [isTg, setIsTg] = useState(false);
   const [history, setHistory] = useState<PositionWire[]>([]);
 
@@ -62,10 +65,39 @@ export function ProfileScreen({ address }: { address: string | null }) {
       .then((res) => {
         setStats(res.stats);
         setTgLinked(res.tgLinked ?? false);
+        setTgUsername(res.tgUsername ?? null);
       })
       .catch(() => {});
+    api.session().then((res) => setTgWidget(res.tgWidget ?? null)).catch(() => {});
     api.positions().then((res) => setHistory(res.positions.filter((p) => p.status !== 'open'))).catch(() => {});
   }, []);
+
+  const linkTelegram = async (): Promise<boolean> => {
+    // widget first (instant bind), bot deep link as the fallback
+    if (tgWidget) {
+      try {
+        const res = await telegramAuth(tgWidget, 'link');
+        if (res) {
+          setTgLinked(true);
+          setTgUsername(res.username);
+          return true;
+        }
+        return false;
+      } catch (err) {
+        alert(err instanceof Error ? err.message : 'Telegram linking failed');
+        return false;
+      }
+    }
+    try {
+      const res = await fetch('/api/telegram', { method: 'POST' });
+      const data = (await res.json()) as { link?: string; error?: string };
+      if (data.link) window.open(data.link, '_blank');
+      else alert(data.error ?? 'Telegram binding unavailable');
+    } catch {
+      alert('Telegram binding unavailable');
+    }
+    return false;
+  };
 
   const winRate = stats && stats.calls > 0 ? Math.round((stats.wins / stats.calls) * 100) : 0;
   const pnl = stats ? Number(BigInt(stats.netPnlUnits)) / 1e6 : 0;
@@ -93,7 +125,11 @@ export function ProfileScreen({ address }: { address: string | null }) {
         {stats && stats.streak.current > 0 && <StreakFlame streak={stats.streak.current} />}
         <span className="text-[18px] text-muted">›</span>
       </button>
-      <WalletSheet open={walletOpen} onClose={() => setWalletOpen(false)} />
+      <WalletSheet
+        open={walletOpen}
+        onClose={() => setWalletOpen(false)}
+        onLinkTelegram={tgWidget && !isTg ? linkTelegram : undefined}
+      />
 
       {/* stats grid */}
       <div className="grid grid-cols-2 gap-2.5">
@@ -148,9 +184,12 @@ export function ProfileScreen({ address }: { address: string | null }) {
               ✓
             </span>
             <div>
-              <div className="text-[13px] font-black text-up">Telegram linked ✓</div>
+              <div className="text-[13px] font-black text-up">
+                Telegram linked ✓{tgUsername ? <span className="num"> · @{tgUsername}</span> : null} ·
+                settlement alerts on
+              </div>
               <div className="text-[10.5px] font-bold text-muted">
-                settlement alerts on — results land while you sleep
+                your account opens on any device — results land while you sleep
               </div>
             </div>
           </div>
@@ -160,16 +199,7 @@ export function ProfileScreen({ address }: { address: string | null }) {
           type="button"
           className="ci-pressable rounded-2xl border border-line bg-card px-4 py-3 text-left"
           data-testid="tg-connect-card"
-          onClick={async () => {
-            try {
-              const res = await fetch('/api/telegram', { method: 'POST' });
-              const data = (await res.json()) as { link?: string; error?: string };
-              if (data.link) window.open(data.link, '_blank');
-              else alert(data.error ?? 'Telegram binding unavailable');
-            } catch {
-              alert('Telegram binding unavailable');
-            }
-          }}
+          onClick={linkTelegram}
         >
           <div className="flex items-center gap-3">
             <span className="flex h-9 w-9 items-center justify-center rounded-full text-[16px]" style={{ background: 'rgba(77,162,255,0.15)', border: '1px solid rgba(77,162,255,0.4)' }}>
@@ -178,7 +208,7 @@ export function ProfileScreen({ address }: { address: string | null }) {
             <div>
               <div className="text-[13px] font-black">Connect Telegram</div>
               <div className="text-[10.5px] font-bold text-muted">
-                Get a DM the moment your calls settle — results land while you sleep
+                Daily 5 dUSDC refill · account on any device · DM the moment your calls settle
               </div>
             </div>
           </div>

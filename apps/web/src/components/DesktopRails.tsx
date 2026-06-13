@@ -10,11 +10,11 @@ import { StreakFlame } from './StreakFlame';
 /** Left rail (≥1024px): open calls + recent settlements. */
 export function LeftRail({
   positions,
-  spotUsd,
+  spotFor,
   onCashOut,
 }: {
   positions: EnrichedPosition[];
-  spotUsd: number | null;
+  spotFor: (oracleId: string) => number | null;
   onCashOut: (id: string) => void;
 }) {
   const open = positions.filter((p) => p.status === 'open');
@@ -28,7 +28,9 @@ export function LeftRail({
           <div className="mt-1 text-[11px] font-bold text-muted">The chart is waiting — make one.</div>
         </div>
       ) : (
-        open.map((p) => <OpenCallCard key={p.id} position={p} spotUsd={spotUsd} onCashOut={onCashOut} />)
+        open.map((p) => (
+          <OpenCallCard key={p.id} position={p} spotUsd={spotFor(p.market.oracleId)} onCashOut={onCashOut} />
+        ))
       )}
 
       <h2 className="mt-2 px-1 text-[10px] font-black tracking-[0.14em] text-muted">SETTLEMENTS</h2>

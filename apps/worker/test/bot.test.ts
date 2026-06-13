@@ -6,7 +6,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Db } from '@callit/db';
 import type { Update, UserFromGetMe } from 'grammy/types';
-import { createBot, renderSettlementCard } from '../src/bot.js';
+import { createBot, renderSettlementCard, sendSettlementDM } from '../src/bot.js';
 
 const BOT_INFO: UserFromGetMe = {
   id: 42,
@@ -59,7 +59,7 @@ describe('notify bot', () => {
     const spy = vi.spyOn(social, 'bindTelegram').mockResolvedValue('0xabcdef1234567890');
     const { bot, sent } = captureBot(fakeDb);
     await bot.handleUpdate(makeUpdate('/start secret42'));
-    expect(spy).toHaveBeenCalledWith(fakeDb, 'secret42', 777);
+    expect(spy).toHaveBeenCalledWith(fakeDb, 'secret42', 777, undefined);
     expect(String(sent[0]!.payload.text)).toContain('✅ Linked to 0xabcd');
     spy.mockRestore();
   });
@@ -102,5 +102,89 @@ describe('settlement cards', () => {
     });
     expect(text).toContain('MISSED CALL −10.00 dUSDC');
     expect(text).toContain('Run it back?');
+  });
+});
+
+describe('settlement DM delivery', () => {
+  it('sends the PNG card via sendPhoto with the text card as caption', async () => {
+    const social = await import('@callit/db');
+    const chatSpy = vi.spyOn(social, 'chatIdFor').mockResolvedValue(777);
+    const { bot, sent } = captureBot({} as Db);
+    const ok = await sendSettlementDM(
+      bot.api,
+      {} as Db,
+      '0xuser',
+      { won: true, payoutDusdc: 19.84, costDusdc: 10, isUp: true, strikeUsd: 61417, settleUsd: 61890, streak: 3 },
+      'https://callit.test',
+    );
+    expect(ok).toBe(true);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.method).toBe('sendPhoto');
+    expect(String(sent[0]!.payload.caption)).toContain('CALLED IT! +19.84 dUSDC');
+    expect(sent[0]!.payload.reply_markup).toBeTruthy();
+    chatSpy.mockRestore();
+  });
+
+  it('skips silently for unbound users', async () => {
+    const social = await import('@callit/db');
+    const chatSpy = vi.spyOn(social, 'chatIdFor').mockResolvedValue(null);
+    const { bot, sent } = captureBot({} as Db);
+    const ok = await sendSettlementDM(
+      bot.api,
+      {} as Db,
+      '0xuser',
+      { won: false, payoutDusdc: 0, costDusdc: 5, isUp: false, strikeUsd: 61417, settleUsd: 61890, streak: 0 },
+      'https://callit.test',
+    );
+    expect(ok).toBe(false);
+    expect(sent).toHaveLength(0);
+    chatSpy.mockRestore();
+  });
+});
+
+describe('inline share', () => {
+  function inlineUpdate(): Update {
+    return {
+      update_id: 2,
+      inline_query: {
+        id: 'q1',
+        from: { id: 777, is_bot: false, first_name: 'Fei' },
+        query: '',
+        offset: '',
+        chat_type: 'group',
+      },
+    };
+  }
+
+  it('serves the cached card photo when one exists', async () => {
+    const social = await import('@callit/db');
+    const cardSpy = vi
+      .spyOn(social, 'lastCardByTgId')
+      .mockResolvedValue({ fileId: 'AgACfile42', text: 'I just called BTC UP 🎯' });
+    const { bot, sent } = captureBot({} as Db);
+    await bot.handleUpdate(inlineUpdate());
+    expect(sent[0]!.method).toBe('answerInlineQuery');
+    const results = sent[0]!.payload.results as Array<Record<string, unknown>>;
+    expect(results[0]!.type).toBe('photo');
+    expect(results[0]!.photo_file_id).toBe('AgACfile42');
+    cardSpy.mockRestore();
+  });
+
+  it('falls back to a text invite without a cached card', async () => {
+    const { bot, sent } = captureBot(null);
+    await bot.handleUpdate(inlineUpdate());
+    expect(sent[0]!.method).toBe('answerInlineQuery');
+    const results = sent[0]!.payload.results as Array<Record<string, unknown>>;
+    expect(results[0]!.type).toBe('article');
+  });
+
+  it('swallows a stale-query answer failure instead of crashing the worker', async () => {
+    const bot = createBot({ token: 'test-token', db: null, appUrl: 'https://callit.test', botInfo: BOT_INFO });
+    // Telegram 400 'query is too old' — used to propagate out of polling,
+    // stop the bot, and take the keeper/settlers down with it
+    bot.api.config.use(async () => {
+      throw new Error('Bad Request: query is too old');
+    });
+    await expect(bot.handleUpdate(inlineUpdate())).resolves.toBeUndefined();
   });
 });

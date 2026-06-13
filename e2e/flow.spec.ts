@@ -44,6 +44,9 @@ test('register → bet → cash out → leaderboard', async ({ page }) => {
 
   // ── hold-to-confirm cash out at the live bid ─────────────────────
   const cashout = page.getByTestId('cashout-button').locator('visible=true').first();
+  await cashout.scrollIntoViewIfNeeded();
+  // scroll past the fixed tab bar — banners above can push the card under it
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
   const box = (await cashout.boundingBox())!;
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down();
@@ -62,7 +65,11 @@ test('register → bet → cash out → leaderboard', async ({ page }) => {
   await page.getByTestId('tab-ranks').click();
   await expect(page.getByTestId('ranks-screen')).toBeVisible();
   if (process.env.DATABASE_URL) {
-    await expect(page.getByTestId('ranks-screen')).toContainText('you', { timeout: 20_000 });
+    // RanksScreen seeds the "you" marker from its first board fetch, then
+    // re-polls rows every 15s. A freshly-resolved cash-out pick can land
+    // just after that first fetch, so allow two full poll cycles before the
+    // player's row is guaranteed present (was 20s — raced the 15s poll).
+    await expect(page.getByTestId('ranks-screen')).toContainText('you', { timeout: 40_000 });
   }
 
   // ── profile shows the call history and badges ─────────────────────

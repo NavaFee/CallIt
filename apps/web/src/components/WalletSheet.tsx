@@ -10,6 +10,7 @@ interface WalletInfo {
   managerId: string | null;
   coinType: string;
   mock: boolean;
+  tgLinked?: boolean;
   walletUnits: string;
   managerUnits: string;
   faucetFormUrl: string;
@@ -42,7 +43,16 @@ function CopyRow({ label, value, mono = true }: { label: string; value: string; 
   );
 }
 
-export function WalletSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function WalletSheet({
+  open,
+  onClose,
+  onLinkTelegram,
+}: {
+  open: boolean;
+  onClose: () => void;
+  /** present ⇒ guests must link Telegram before the deposit flow opens */
+  onLinkTelegram?: () => Promise<boolean>;
+}) {
   const toast = useToast();
   const [info, setInfo] = useState<WalletInfo | null>(null);
   const [qr, setQr] = useState<string | null>(null);
@@ -192,7 +202,35 @@ export function WalletSheet({ open, onClose }: { open: boolean; onClose: () => v
           ))}
         </div>
 
-        {tab === 'deposit' && info && (
+        {/* deposit safety gate: real coins need a recoverable account */}
+        {tab === 'deposit' && info && info.tgLinked === false && onLinkTelegram && (
+          <div
+            className="mt-3 rounded-2xl border px-4 py-4 text-center"
+            style={{ borderColor: 'rgba(77,162,255,0.5)', background: 'rgba(77,162,255,0.08)' }}
+            data-testid="deposit-gate"
+          >
+            <div className="font-display text-[15px] text-sui">SECURE YOUR ACCOUNT FIRST</div>
+            <p className="mt-1 text-[11.5px] font-bold text-muted">
+              Real funds need a recoverable account — link Telegram first. Your address, balance and
+              history stay exactly the same.
+            </p>
+            <button
+              type="button"
+              className="ci-pressable mt-3 w-full rounded-xl py-2.5 text-[12px] font-black text-[#04203D]"
+              style={{ background: 'linear-gradient(180deg, #8FC6FF, var(--sui) 42%)', boxShadow: '0 3px 0 #1E5E9E' }}
+              data-testid="deposit-gate-link"
+              onClick={async () => {
+                if (await onLinkTelegram()) {
+                  setInfo((cur) => (cur ? { ...cur, tgLinked: true } : cur));
+                }
+              }}
+            >
+              ✈️ LINK TELEGRAM
+            </button>
+          </div>
+        )}
+
+        {tab === 'deposit' && info && !(info.tgLinked === false && onLinkTelegram) && (
           <div className="mt-3 flex flex-col gap-2.5">
             <p className="text-[11.5px] font-bold text-muted">
               Send dUSDC from any Sui wallet to your address above — it lands in seconds and is

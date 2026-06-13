@@ -10,15 +10,9 @@ export interface TgWebApp {
   setBackgroundColor?: (color: string) => void;
   enableClosingConfirmation?: () => void;
   disableClosingConfirmation?: () => void;
-  MainButton?: {
-    setParams: (p: { text?: string; color?: string; text_color?: string; is_visible?: boolean }) => void;
-    show: () => void;
-    hide: () => void;
-    onClick: (cb: () => void) => void;
-    offClick: (cb: () => void) => void;
-  };
   HapticFeedback?: {
     notificationOccurred: (type: 'error' | 'success' | 'warning') => void;
+    impactOccurred?: (style: 'light' | 'medium' | 'heavy' | 'rigid' | 'soft') => void;
   };
 }
 

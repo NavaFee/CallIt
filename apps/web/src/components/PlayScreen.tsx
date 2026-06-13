@@ -14,6 +14,7 @@ import { ResultOverlay, type ResultData } from './ResultOverlay';
 import { Sparkline } from './Sparkline';
 import { WalletSheet } from './WalletSheet';
 import { tgWebApp } from '@/lib/tg';
+import { telegramAuth, type TgWidgetConfig } from '@/lib/tgAuth';
 import { StreakFlame } from './StreakFlame';
 import { useToast } from './Toast';
 
@@ -55,6 +56,9 @@ export function PlayScreen() {
   const [refueling, setRefueling] = useState(false);
   const [walletOpen, setWalletOpen] = useState(false);
   const [isTg, setIsTg] = useState(false);
+  const [tgLinked, setTgLinked] = useState(false);
+  const [tgWidget, setTgWidget] = useState<TgWidgetConfig | null>(null);
+  const [nudge, setNudge] = useState(false);
   // bumped on every mutation; stale poll responses are dropped
   const balanceVersion = useRef(0);
 
@@ -74,6 +78,18 @@ export function PlayScreen() {
   const spotUsd = selected?.spotUsd ?? null;
   const fuse = selected && !selected.tradeable ? selected.fuse ?? { reason: 'unknown', detail: '' } : null;
   const openPositions = positions.filter((p) => p.status === 'open');
+  // positions can live on a different oracle than the selected chart
+  const spotFor = useCallback(
+    (oracleId: string) => market?.oracles.find((o) => o.oracleId === oracleId)?.spotUsd ?? null,
+    [market],
+  );
+  // lock line on the chart: the soonest-expiring open call on THIS oracle
+  const chartLockPos = openPositions
+    .filter((p) => p.market.oracleId === selectedId)
+    .sort((a, b) => Number(a.market.expiry) - Number(b.market.expiry))[0];
+  const chartLock = chartLockPos
+    ? { usd: fixedToUsdNum(chartLockPos.market.strike), isUp: chartLockPos.market.isUp }
+    : null;
 
   // ── session bootstrap (Mini App logs in via initData first) ────────
   useEffect(() => {
@@ -100,6 +116,8 @@ export function PlayScreen() {
         .then((res) => {
           setSession(res.session);
           if (res.balanceUnits) setBalanceUnits(res.balanceUnits);
+          setTgWidget(res.tgWidget ?? null);
+          setTgLinked(res.tgLinked ?? false);
           if (res.session) {
             api.profile().then((p) => setStreak(p.stats?.streak.current ?? 0)).catch(() => {});
           }
@@ -262,14 +280,79 @@ export function PlayScreen() {
       if (res.session.managerId) {
         toast.push('tx', `On-chain account ${shortAddr(res.session.managerId)} created`);
       }
+      window.dispatchEvent(new CustomEvent('callit:session-changed'));
     } catch (err) {
       toast.push('error', err instanceof Error ? err.message : 'registration failed');
       throw err;
     }
   }, [toast]);
 
+  // ── Telegram Login Widget: onboarding login + guest account linking ──
+  const telegramLogin = useCallback(async () => {
+    if (!tgWidget) return;
+    try {
+      const res = await telegramAuth(tgWidget, 'login');
+      if (!res) return; // user closed the popup
+      const fresh = await api.session();
+      setSession(fresh.session);
+      if (fresh.balanceUnits) setBalanceUnits(fresh.balanceUnits);
+      setTgLinked(true);
+      api.profile().then((p) => setStreak(p.stats?.streak.current ?? 0)).catch(() => {});
+      if (res.merged) {
+        toast.push('money', 'Welcome back — your account is restored');
+      } else if (!res.airdropFailed && res.airdroppedUnits !== '0') {
+        toast.push('money', `+${fmtDusdcUnits(res.airdroppedUnits)} dUSDC welcome stack`);
+      }
+    } catch (err) {
+      toast.push('error', err instanceof Error ? err.message : 'Telegram login failed');
+      throw err;
+    }
+  }, [tgWidget, toast]);
+
+  // one-shot post-settlement nudge for guests (shows once, ever)
+  const closeResult = useCallback(() => {
+    setResult(null);
+    if (isTg || tgLinked || !tgWidget) return;
+    try {
+      if (localStorage.getItem('callit_link_nudge_done')) return;
+      localStorage.setItem('callit_link_nudge_done', '1');
+    } catch {
+      return;
+    }
+    setNudge(true);
+  }, [isTg, tgLinked, tgWidget]);
+
+  const claimTopup = useCallback(async () => {
+    try {
+      const res = await fetch('/api/topup', { method: 'POST' });
+      const data = (await res.json()) as { amount?: number; error?: string };
+      if (!res.ok) throw new Error(data.error ?? 'refill failed');
+      toast.push('money', `+${data.amount?.toFixed(2)} dUSDC daily refill`);
+      refreshPositions();
+    } catch (err) {
+      toast.push('error', err instanceof Error ? err.message : 'refill failed');
+    }
+  }, [toast, refreshPositions]);
+
+  /** Link the current guest account; returns true when bound. */
+  const linkTelegram = useCallback(async (): Promise<boolean> => {
+    if (!tgWidget) return false;
+    try {
+      const res = await telegramAuth(tgWidget, 'link');
+      if (!res) return false;
+      setTgLinked(true);
+      setNudge(false);
+      toast.push('money', 'Telegram linked — your account is now recoverable');
+      return true;
+    } catch (err) {
+      toast.push('error', err instanceof Error ? err.message : 'Telegram link failed');
+      return false;
+    }
+  }, [tgWidget, toast]);
+
   const placeBet = useCallback(async () => {
     if (!picked || !selectedId || !quote) return;
+    tgWebApp()?.HapticFeedback?.impactOccurred?.('medium');
     setPlacing(0);
     const stepper = setInterval(() => setPlacing((s) => (s == null || s >= 2 ? s : s + 1)), 600);
     try {
@@ -320,32 +403,8 @@ export function PlayScreen() {
     [positions, refreshPositions, spotUsd, toast, announceBadges],
   );
 
-  // ── Telegram Mini App chrome ───────────────────────────────────────
-  const placeBetRef = useRef(placeBet);
-  placeBetRef.current = placeBet;
-
-  useEffect(() => {
-    const tg = tgWebApp();
-    if (!isTg || !tg?.MainButton) return;
-    const button = tg.MainButton;
-    if (picked && quote && placing == null) {
-      const handler = () => placeBetRef.current();
-      button.setParams({
-        text: `LOCK IT IN · WIN ${fmtDusdcUnits(quote[picked].quantityUnits)} dUSDC`,
-        color: picked === 'up' ? '#00E07B' : '#FF3D5E',
-        text_color: picked === 'up' ? '#06291A' : '#2B0410',
-      });
-      button.onClick(handler);
-      button.show();
-      return () => {
-        button.offClick(handler);
-        button.hide();
-      };
-    }
-    button.hide();
-    return undefined;
-  }, [isTg, picked, quote, placing]);
-
+  // ── Telegram Mini App chrome (the bet button is the in-page one — same
+  // as web — so the flow reads identically in both; haptics stay native) ─
   // closing confirmation while a call is open
   useEffect(() => {
     const tg = tgWebApp();
@@ -366,7 +425,7 @@ export function PlayScreen() {
 
   return (
     <div className="relative mx-auto lg:grid lg:max-w-[1280px] lg:grid-cols-[290px_minmax(0,1fr)_310px] lg:items-start lg:gap-5 lg:px-6 lg:pt-5">
-      <LeftRail positions={positions} spotUsd={spotUsd} onCashOut={cashOut} />
+      <LeftRail positions={positions} spotFor={spotFor} onCashOut={cashOut} />
       <div className="relative mx-auto flex min-h-dvh w-full max-w-md flex-col gap-3 px-4 pb-28 pt-4 lg:min-h-0 lg:max-w-none lg:px-0 lg:pb-8 lg:pt-0">
       {/* header */}
       <header className="flex items-center justify-between">
@@ -441,7 +500,7 @@ export function PlayScreen() {
           </div>
         </div>
         <div className="mt-2">
-          <Sparkline points={points} width={chartW} height={120} up={priceUp} />
+          <Sparkline points={points} width={chartW} height={120} up={priceUp} lock={chartLock} />
         </div>
       </section>
 
@@ -478,26 +537,67 @@ export function PlayScreen() {
             >
               DEPOSIT
             </button>
+            {isTg || tgLinked || !tgWidget ? (
+              <button
+                type="button"
+                className="ci-pressable flex-1 rounded-xl py-2 text-[12px] font-black text-[#3A2700]"
+                style={{ background: 'linear-gradient(180deg, #FFE08A, var(--gold) 42%)', boxShadow: '0 3px 0 var(--gold-deep)' }}
+                data-testid="topup-claim"
+                onClick={claimTopup}
+              >
+                CLAIM 5 dUSDC
+              </button>
+            ) : (
+              // the daily refill is the linking incentive — guests bind first
+              <button
+                type="button"
+                className="ci-pressable flex-1 rounded-xl py-2 text-[12px] font-black text-[#04203D]"
+                style={{ background: 'linear-gradient(180deg, #8FC6FF, var(--sui) 42%)', boxShadow: '0 3px 0 #1E5E9E' }}
+                data-testid="topup-link"
+                onClick={async () => {
+                  if (await linkTelegram()) await claimTopup();
+                }}
+              >
+                LINK TELEGRAM TO CLAIM
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* one-time post-settlement nudge: the account is browser-local */}
+      {nudge && session && !isTg && !tgLinked && tgWidget && (
+        <div
+          className="rounded-2xl border px-4 py-3"
+          style={{ borderColor: 'rgba(77,162,255,0.5)', background: 'rgba(77,162,255,0.08)' }}
+          data-testid="link-nudge"
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <div className="font-display text-[14px] text-sui">NICE — FIRST SETTLEMENT IN THE BOOKS</div>
+              <div className="mt-0.5 text-[11px] font-bold text-muted">
+                Your account lives in this browser — link Telegram to keep it across devices.
+              </div>
+            </div>
             <button
               type="button"
-              className="ci-pressable flex-1 rounded-xl py-2 text-[12px] font-black text-[#3A2700]"
-              style={{ background: 'linear-gradient(180deg, #FFE08A, var(--gold) 42%)', boxShadow: '0 3px 0 var(--gold-deep)' }}
-              data-testid="topup-claim"
-              onClick={async () => {
-                try {
-                  const res = await fetch('/api/topup', { method: 'POST' });
-                  const data = (await res.json()) as { amount?: number; error?: string };
-                  if (!res.ok) throw new Error(data.error ?? 'refill failed');
-                  toast.push('money', `+${data.amount?.toFixed(2)} dUSDC daily refill`);
-                  refreshPositions();
-                } catch (err) {
-                  toast.push('error', err instanceof Error ? err.message : 'refill failed');
-                }
-              }}
+              aria-label="dismiss"
+              className="text-[14px] font-black text-muted"
+              data-testid="link-nudge-close"
+              onClick={() => setNudge(false)}
             >
-              CLAIM 5 dUSDC
+              ✕
             </button>
           </div>
+          <button
+            type="button"
+            className="ci-pressable mt-2.5 w-full rounded-xl py-2 text-[12px] font-black text-[#04203D]"
+            style={{ background: 'linear-gradient(180deg, #8FC6FF, var(--sui) 42%)', boxShadow: '0 3px 0 #1E5E9E' }}
+            data-testid="link-nudge-cta"
+            onClick={() => void linkTelegram()}
+          >
+            ✈️ LINK TELEGRAM
+          </button>
         </div>
       )}
 
@@ -624,12 +724,6 @@ export function PlayScreen() {
                 );
               })}
             </div>
-            {isTg && (
-              <div className="mt-3 text-center text-[11px] font-bold text-muted">
-                confirm with the Telegram button below ↓
-              </div>
-            )}
-            {!isTg && (
             <ChunkyButton
               hue={picked}
               edgeH={6}
@@ -645,7 +739,6 @@ export function PlayScreen() {
                 </span>
               )}
             </ChunkyButton>
-            )}
             {quote && (
               <div className="mt-2 text-center text-[10px] font-bold text-muted">
                 protocol round-trip spread ≈{' '}
@@ -668,7 +761,7 @@ export function PlayScreen() {
         <section className="flex flex-col gap-2.5 lg:hidden">
           <h2 className="px-1 text-[10px] font-black tracking-[0.14em] text-muted">OPEN CALLS</h2>
           {openPositions.map((p) => (
-            <OpenCallCard key={p.id} position={p} spotUsd={spotUsd} onCashOut={cashOut} />
+            <OpenCallCard key={p.id} position={p} spotUsd={spotFor(p.market.oracleId)} onCashOut={cashOut} />
           ))}
         </section>
       )}
@@ -680,9 +773,13 @@ export function PlayScreen() {
       )}
 
       {/* overlays */}
-      <WalletSheet open={walletOpen} onClose={() => setWalletOpen(false)} />
-      {result && <ResultOverlay result={result} onClose={() => setResult(null)} />}
-      {session === null && <Onboarding onClaim={claim} />}
+      <WalletSheet
+        open={walletOpen}
+        onClose={() => setWalletOpen(false)}
+        onLinkTelegram={tgWidget && !isTg ? linkTelegram : undefined}
+      />
+      {result && <ResultOverlay result={result} onClose={closeResult} />}
+      {session === null && <Onboarding onClaim={claim} onTelegram={tgWidget ? telegramLogin : null} />}
       </div>
       <RightRail streak={streak} />
     </div>

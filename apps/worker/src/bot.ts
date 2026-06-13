@@ -1,12 +1,14 @@
-import { Bot, InlineKeyboard, type Api, type RawApi } from 'grammy';
+import { Bot, InlineKeyboard, InputFile, type Api, type RawApi } from 'grammy';
 import type { UserFromGetMe } from 'grammy/types';
-import { bindTelegram, chatIdFor, getDb, type Db } from '@callit/db';
+import { bindTelegram, chatIdFor, getDb, lastCardByTgId, setLastCard, type Db } from '@callit/db';
 
 /**
  * CallIt notify bot — notifications only, never custody or trading.
  * - /start <code> binds a Telegram chat to a CallIt account (deep link
  *   minted by the web profile screen)
- * - settlement DMs: result card + share button after the keeper claims
+ * - settlement DMs: server-rendered PNG result card + share button after
+ *   the keeper claims (text-only fallback if rendering fails)
+ * - inline "Share": re-serves the last settlement card into any chat
  */
 
 export interface BotDeps {
@@ -34,7 +36,7 @@ export function createBot({ token, db, appUrl, botInfo }: BotDeps) {
       await ctx.reply('Binding is unavailable right now (no database configured).');
       return;
     }
-    const userId = await bindTelegram(db, code, ctx.chat.id);
+    const userId = await bindTelegram(db, code, ctx.chat.id, ctx.from?.username);
     if (!userId) {
       await ctx.reply('That link expired — grab a fresh one from your CallIt profile.');
       return;
@@ -51,6 +53,56 @@ export function createBot({ token, db, appUrl, botInfo }: BotDeps) {
     ),
   );
 
+  // inline "Share": the last settlement card PNG, straight into any chat.
+  // answerInlineQuery routinely 400s ('query is too old') once Telegram's
+  // ~10s answer window lapses — swallow it so a stale inline panel can't
+  // surface to bot.catch and stop polling.
+  bot.on('inline_query', async (ctx) => {
+    try {
+      const botUsername = process.env.TELEGRAM_BOT_USERNAME ?? 'callit_notify_bot';
+      const miniapp = `https://t.me/${botUsername}/play?startapp=${ctx.from.id}`;
+      const keyboard = new InlineKeyboard().url('Play CallIt', miniapp);
+      const card = db ? await lastCardByTgId(db, ctx.from.id).catch(() => null) : null;
+      if (card) {
+        await ctx.answerInlineQuery(
+          [
+            {
+              type: 'photo',
+              id: 'last-card',
+              photo_file_id: card.fileId,
+              caption: card.text ?? undefined,
+              reply_markup: keyboard,
+            },
+          ],
+          { cache_time: 0, is_personal: true },
+        );
+        return;
+      }
+      await ctx.answerInlineQuery(
+        [
+          {
+            type: 'article',
+            id: 'invite',
+            title: 'Invite to CallIt',
+            description: 'Call the market, win the pot — BTC calls on Sui.',
+            input_message_content: {
+              message_text: `Calling BTC on CallIt — join me: ${miniapp}`,
+            },
+            reply_markup: keyboard,
+          },
+        ],
+        { cache_time: 0, is_personal: true },
+      );
+    } catch (err) {
+      console.error('inline_query failed:', err);
+    }
+  });
+
+  // a thrown middleware error otherwise stops polling AND rejects bot.start(),
+  // which rejects the worker's Promise.all → process.exit, killing the keeper
+  // and settlers too. Notifications must never take the worker down.
+  bot.catch((err) => console.error('notify bot error:', err.error));
+
   return bot;
 }
 
@@ -62,6 +114,10 @@ export interface SettlementCard {
   strikeUsd: number;
   settleUsd: number;
   streak: number;
+  /** keeper claim digest (real custody only) — short link on the card */
+  txDigest?: string;
+  /** post-settlement balance, when the caller knows it (mock settler) */
+  balanceDusdc?: number;
 }
 
 export function renderSettlementCard(card: SettlementCard): string {
@@ -99,7 +155,34 @@ export async function sendSettlementDM(
   const keyboard = new InlineKeyboard()
     .url('Play again', miniapp)
     .switchInline('Share', share);
-  await api.sendMessage(chatId, renderSettlementCard(card), { reply_markup: keyboard });
+  const caption = renderSettlementCard(card);
+
+  // Render the PNG first, in its own guard. The send is OUTSIDE this try on
+  // purpose: a render failure falls back to a text DM, but a sendPhoto
+  // failure must NOT — Telegram may have already delivered the photo, so a
+  // text fallback there would double-DM the settlement. Let send errors
+  // propagate to the caller's .catch (logged once, at-most-once delivery).
+  let png: Buffer | null = null;
+  try {
+    const { renderSettlementCardPng } = await import('./card.js');
+    png = await renderSettlementCardPng(card);
+  } catch (err) {
+    console.error('card render failed, falling back to text:', err);
+  }
+
+  if (!png) {
+    await api.sendMessage(chatId, caption, { reply_markup: keyboard });
+    return true;
+  }
+
+  const msg = await api.sendPhoto(chatId, new InputFile(png, 'callit-card.png'), {
+    caption,
+    reply_markup: keyboard,
+  });
+  // remember the uploaded photo so the inline "Share" can re-serve it
+  const sizes = (msg as { photo?: Array<{ file_id: string }> })?.photo;
+  const fileId = sizes?.[sizes.length - 1]?.file_id;
+  if (fileId) await setLastCard(db, userId, fileId, share).catch(() => {});
   return true;
 }
 

@@ -16,6 +16,10 @@ export default defineConfig({
   testDir: './e2e',
   timeout: 120_000,
   retries: process.env.CI ? 1 : 0,
+  // One dev server, one Postgres, one shared leaderboard — parallel specs
+  // race each other's cash-outs into the weekly board, flaking the "you"
+  // rank assertion. Serial is the correct mode for this shared-backend suite.
+  workers: 1,
   use: {
     baseURL: 'http://localhost:3199',
     // mobile-first viewport on chromium (webkit needs a second browser download)
@@ -34,6 +38,9 @@ export default defineConfig({
       SESSION_SECRET: 'e2e-secret',
       // tg-miniapp spec signs initData with this token; server must match
       TELEGRAM_BOT_TOKEN: 'e2e:TEST-bot-token',
+      // with both set, the Login Widget config is served and the dual-entry
+      // onboarding renders (account-link spec asserts the Telegram door)
+      TELEGRAM_BOT_USERNAME: 'callit_e2e_bot',
       ...(process.env.E2E_REAL === '1' ? {} : { SPONSOR_KEY: '', OPS_WALLET_KEY: '' }),
     },
   },

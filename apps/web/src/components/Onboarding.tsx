@@ -5,12 +5,30 @@ import { WELCOME_DUSDC } from '@/lib/welcome';
 import { ChunkyButton } from './ChunkyButton';
 
 /**
- * First-visit gate: one tap creates the session wallet, sponsors the
- * on-chain PredictManager and drops the welcome dUSDC stack.
- * zkLogin (Google) lands in the same provider seam later.
+ * First-visit gate, two doors in:
+ * - Continue with Telegram (Login Widget) — recoverable account from tap one;
+ *   also how a returning player gets their wallet back on a fresh browser.
+ * - Try as guest — the original one-tap session wallet + welcome stack.
+ * The Mini App never sees this screen (initData logs in silently).
  */
-export function Onboarding({ onClaim }: { onClaim: () => Promise<void> }) {
+export function Onboarding({
+  onClaim,
+  onTelegram,
+}: {
+  onClaim: () => Promise<void>;
+  /** null/undefined ⇒ widget not configured on this deployment */
+  onTelegram?: (() => Promise<void>) | null;
+}) {
   const [stage, setStage] = useState<'intro' | 'connecting'>('intro');
+
+  const run = async (action: () => Promise<void>) => {
+    setStage('connecting');
+    try {
+      await action();
+    } finally {
+      setStage('intro');
+    }
+  };
 
   return (
     <div
@@ -42,21 +60,40 @@ export function Onboarding({ onClaim }: { onClaim: () => Promise<void> }) {
       </div>
 
       {stage === 'intro' ? (
-        <ChunkyButton
-          hue="gold"
-          className="mt-10 h-[62px] w-full max-w-[320px] text-[18px]"
-          data-testid="claim-button"
-          onClick={async () => {
-            setStage('connecting');
-            try {
-              await onClaim();
-            } finally {
-              setStage('intro');
-            }
-          }}
-        >
-          START — CLAIM {WELCOME_DUSDC} dUSDC
-        </ChunkyButton>
+        <div className="mt-10 flex w-full max-w-[320px] flex-col items-center gap-3">
+          {onTelegram && (
+            <ChunkyButton
+              hue="sui"
+              className="h-[62px] w-full flex-col gap-0 text-[17px]"
+              data-testid="tg-login-button"
+              onClick={() => run(onTelegram)}
+            >
+              ✈️ Continue with Telegram
+              <span className="text-[11px] font-black opacity-75">
+                your account on any device — claim {WELCOME_DUSDC} dUSDC
+              </span>
+            </ChunkyButton>
+          )}
+          {onTelegram ? (
+            <button
+              type="button"
+              className="ci-pressable w-full rounded-2xl border border-line bg-white/[0.04] py-3 text-[13px] font-black text-muted"
+              data-testid="claim-button"
+              onClick={() => run(onClaim)}
+            >
+              Try as guest — claim {WELCOME_DUSDC} dUSDC
+            </button>
+          ) : (
+            <ChunkyButton
+              hue="gold"
+              className="h-[62px] w-full text-[18px]"
+              data-testid="claim-button"
+              onClick={() => run(onClaim)}
+            >
+              START — CLAIM {WELCOME_DUSDC} dUSDC
+            </ChunkyButton>
+          )}
+        </div>
       ) : (
         <div className="mt-10 flex h-[62px] flex-col items-center justify-center gap-2">
           <div

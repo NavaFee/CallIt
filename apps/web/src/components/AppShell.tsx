@@ -1,7 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { api } from '@/lib/api';
+import { tgWebApp } from '@/lib/tg';
+import { telegramAuth, type TgWidgetConfig } from '@/lib/tgAuth';
 import { PlayScreen } from './PlayScreen';
 import { ProfileScreen } from './ProfileScreen';
 import { RanksScreen } from './RanksScreen';
@@ -14,16 +16,86 @@ const TABS: Array<{ id: Tab; label: string; glyph: string }> = [
   { id: 'profile', label: 'PROFILE', glyph: '★' },
 ];
 
+const BANNER_KEY = 'callit_guest_banner_dismissed';
+
 export function AppShell() {
   const [tab, setTab] = useState<Tab>('play');
   const [address, setAddress] = useState<string | null>(null);
+  const [tgLinked, setTgLinked] = useState(true); // assume linked until told otherwise
+  const [tgWidget, setTgWidget] = useState<TgWidgetConfig | null>(null);
+  const [bannerDismissed, setBannerDismissed] = useState(true);
 
+  const refresh = useCallback(() => {
+    api
+      .session()
+      .then((res) => {
+        setAddress(res.session?.address ?? null);
+        setTgLinked(res.tgLinked ?? false);
+        setTgWidget(res.tgWidget ?? null);
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(refresh, [refresh, tab]);
   useEffect(() => {
-    api.session().then((res) => setAddress(res.session?.address ?? null)).catch(() => {});
-  }, [tab]);
+    try {
+      setBannerDismissed(localStorage.getItem(BANNER_KEY) === '1');
+    } catch {
+      // storage blocked — keep the banner off rather than undismissable
+    }
+    window.addEventListener('callit:session-changed', refresh);
+    return () => window.removeEventListener('callit:session-changed', refresh);
+  }, [refresh]);
+
+  const guestBanner =
+    !bannerDismissed && address !== null && !tgLinked && tgWidget !== null && tgWebApp() === null;
 
   return (
     <div className="relative min-h-dvh">
+      {/* guest mode strip: persistent until linked, dismissible */}
+      {guestBanner && (
+        <div
+          className="flex items-center gap-2 border-b px-4 py-1.5"
+          style={{ borderColor: 'rgba(255,197,61,0.35)', background: 'rgba(255,197,61,0.08)' }}
+          data-testid="guest-banner"
+        >
+          <span className="flex-1 text-[10.5px] font-bold text-muted">
+            <span className="font-black text-gold">Guest mode</span> — link Telegram to secure your
+            account
+          </span>
+          <button
+            type="button"
+            className="ci-pressable whitespace-nowrap rounded-full px-2.5 py-1 text-[10px] font-black text-[#04203D]"
+            style={{ background: 'linear-gradient(180deg, #8FC6FF, var(--sui) 60%)' }}
+            data-testid="guest-banner-link"
+            onClick={() => {
+              if (!tgWidget) return;
+              telegramAuth(tgWidget, 'link')
+                .then((res) => res && setTgLinked(true))
+                .catch(() => {});
+            }}
+          >
+            LINK
+          </button>
+          <button
+            type="button"
+            aria-label="dismiss guest banner"
+            className="px-1 text-[13px] font-black text-muted"
+            data-testid="guest-banner-close"
+            onClick={() => {
+              setBannerDismissed(true);
+              try {
+                localStorage.setItem(BANNER_KEY, '1');
+              } catch {
+                // session-only dismissal is fine
+              }
+            }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* keep PlayScreen mounted so polls/overlays survive tab switches */}
       <div style={{ display: tab === 'play' ? 'block' : 'none' }}>
         <PlayScreen />

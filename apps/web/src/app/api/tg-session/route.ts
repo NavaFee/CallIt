@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { verifyTelegramInitData } from '@callit/core';
-import { clearTgBinding, getDb, userByTgId } from '@callit/db';
+import { clearTgBinding, getDb, setTgUsername, userByTgId } from '@callit/db';
 import { jsonSafe } from '@/lib/server/clients';
 import {
   createAccount,
@@ -54,6 +54,9 @@ export async function POST(req: NextRequest) {
           provider: 'telegram',
         };
         saveSession(session);
+        if (db && verified.user.username) {
+          await setTgUsername(db, tgId, verified.user.username).catch(() => {});
+        }
         return NextResponse.json({
           session: jsonSafe({
             address: session.address,
@@ -73,6 +76,7 @@ export async function POST(req: NextRequest) {
     const result = await createAccount({
       provider: 'telegram',
       tgChatId: tgId,
+      tgUsername: verified.user.username,
       referrerId: verified.startParam,
     });
     saveSession(result.session);

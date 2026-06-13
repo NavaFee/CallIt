@@ -84,6 +84,7 @@ export async function runMockSettler(): Promise<void> {
                 strikeUsd: Number(row.strike) / 1e9,
                 settleUsd: Number(oracle.price) / 1e9,
                 streak: resolution.streak.current,
+                balanceDusdc: unitsToDusdc(BigInt(ledger.balanceUnits)),
               },
               process.env.APP_URL ?? 'https://callit-seven.vercel.app',
             ).catch((err) => log(`DM failed: ${err}`));

@@ -181,12 +181,17 @@ export async function createBindCode(db: Db, userId: string): Promise<string> {
   return code;
 }
 
-export async function bindTelegram(db: Db, code: string, chatId: number): Promise<string | null> {
+export async function bindTelegram(
+  db: Db,
+  code: string,
+  chatId: number,
+  username?: string,
+): Promise<string | null> {
   const [user] = await db.select().from(users).where(eq(users.tgBindCode, code)).limit(1);
   if (!user) return null;
   await db
     .update(users)
-    .set({ tgChatId: chatId, tgBindCode: null })
+    .set({ tgChatId: chatId, tgBindCode: null, ...(username ? { tgUsername: username } : {}) })
     .where(eq(users.id, user.id));
   return user.id;
 }
@@ -194,6 +199,76 @@ export async function bindTelegram(db: Db, code: string, chatId: number): Promis
 export async function chatIdFor(db: Db, userId: string): Promise<number | null> {
   const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
   return user?.tgChatId ?? null;
+}
+
+export async function tgInfoFor(
+  db: Db,
+  userId: string,
+): Promise<{ chatId: number | null; username: string | null }> {
+  const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+  return { chatId: user?.tgChatId ?? null, username: user?.tgUsername ?? null };
+}
+
+/**
+ * Bind a tg id to an EXISTING account (Login Widget link from the web).
+ * Writes the sealed session key too, so accounts created when the DB was
+ * absent (or before binding) become recoverable from any device.
+ */
+export async function linkTelegramAccount(
+  db: Db,
+  account: {
+    userId: string;
+    managerId: string | null;
+    tgChatId: number;
+    tgUsername?: string;
+    sessionKeySealed: string;
+  },
+): Promise<'linked' | 'conflict'> {
+  const [taken] = await db.select().from(users).where(eq(users.tgChatId, account.tgChatId)).limit(1);
+  if (taken && taken.id !== account.userId) return 'conflict';
+  await db
+    .insert(users)
+    .values({
+      id: account.userId,
+      managerId: account.managerId,
+      tgChatId: account.tgChatId,
+      tgUsername: account.tgUsername,
+      sessionKeySealed: account.sessionKeySealed,
+    })
+    .onConflictDoUpdate({
+      target: users.id,
+      set: {
+        tgChatId: account.tgChatId,
+        ...(account.tgUsername ? { tgUsername: account.tgUsername } : {}),
+        sessionKeySealed: account.sessionKeySealed,
+      },
+    });
+  return 'linked';
+}
+
+/** Refresh the stored @username on login (merge path doesn't re-register). */
+export async function setTgUsername(db: Db, tgId: number, username: string): Promise<void> {
+  await db.update(users).set({ tgUsername: username }).where(eq(users.tgChatId, tgId));
+}
+
+// ── settlement-card share cache (inline "Share" reuses the last DM photo) ─
+
+export async function setLastCard(
+  db: Db,
+  userId: string,
+  fileId: string,
+  text: string,
+): Promise<void> {
+  await db.update(users).set({ lastCardFileId: fileId, lastCardText: text }).where(eq(users.id, userId));
+}
+
+export async function lastCardByTgId(
+  db: Db,
+  tgId: number,
+): Promise<{ fileId: string; text: string | null } | null> {
+  const [user] = await db.select().from(users).where(eq(users.tgChatId, tgId)).limit(1);
+  if (!user?.lastCardFileId) return null;
+  return { fileId: user.lastCardFileId, text: user.lastCardText };
 }
 
 /** Reverse lookup for the keeper: PredictManager id → CallIt user id. */
@@ -231,6 +306,7 @@ export async function upsertAccount(
     id: string;
     managerId: string | null;
     tgChatId?: number;
+    tgUsername?: string;
     sessionKeySealed?: string;
     referrerId?: string;
   },
@@ -243,6 +319,7 @@ export async function upsertAccount(
       set: {
         managerId: account.managerId,
         ...(account.tgChatId !== undefined ? { tgChatId: account.tgChatId } : {}),
+        ...(account.tgUsername !== undefined ? { tgUsername: account.tgUsername } : {}),
         ...(account.sessionKeySealed !== undefined
           ? { sessionKeySealed: account.sessionKeySealed }
           : {}),

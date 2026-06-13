@@ -125,7 +125,7 @@ async function claimSettledPositions(oracle: OracleRow): Promise<void> {
 async function notifySettlement(
   oracle: OracleRow,
   managerId: string,
-  _digest: string,
+  digest: string,
 ): Promise<void> {
   const db = getDb();
   if (!db) return;
@@ -163,6 +163,7 @@ async function notifySettlement(
           strikeUsd,
           settleUsd: settlementPrice,
           streak: resolution.streak.current,
+          txDigest: digest,
         },
         process.env.APP_URL ?? 'https://callit-seven.vercel.app',
       );

@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
-import { applyResult, chatIdFor, earnedBadges, getDb } from '@callit/db';
+import { applyResult, earnedBadges } from '@callit/db';
 import type { Position } from '@callit/core';
 import { getSession } from '@/lib/server/session';
 import { socialProfile } from '@/lib/server/social';
+import { tgLinkState } from '@/lib/server/tgState';
 import { tradingPortFor } from '@/lib/server/trading';
 
 export const runtime = 'nodejs';
@@ -12,23 +13,27 @@ export async function GET() {
   const session = getSession();
   if (!session) return NextResponse.json({ error: 'no session' }, { status: 401 });
 
-  const db = getDb();
-  const tgLinked = db
-    ? (await chatIdFor(db, session.address).catch(() => null)) !== null
-    : false;
+  const tg = await tgLinkState(session);
+  const tgLinked = tg.linked;
+  const tgUsername = tg.username;
 
   const dbStats = await socialProfile(session.address);
   if (dbStats) {
-    return NextResponse.json({ stats: dbStats, tgLinked, available: true });
+    return NextResponse.json({ stats: dbStats, tgLinked, tgUsername, available: true });
   }
 
   // No database: derive the same stats from the session's positions so the
   // profile never contradicts the play screen, whatever the deployment.
   try {
     const positions = await tradingPortFor(session).listPositions();
-    return NextResponse.json({ stats: deriveStats(positions), tgLinked, available: true });
+    return NextResponse.json({
+      stats: deriveStats(positions),
+      tgLinked,
+      tgUsername,
+      available: true,
+    });
   } catch {
-    return NextResponse.json({ stats: null, tgLinked, available: false });
+    return NextResponse.json({ stats: null, tgLinked, tgUsername, available: false });
   }
 }
 

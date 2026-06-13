@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { MOCK_FUNDS } from '@/lib/server/clients';
 import { getSession, registerSession } from '@/lib/server/session';
+import { tgLinkState, tgWidgetConfig } from '@/lib/server/tgState';
 import { tradingPortFor } from '@/lib/server/trading';
 
 export const runtime = 'nodejs';
@@ -18,12 +19,15 @@ function publicSession(session: { address: string; managerId: string | null; cre
 
 export async function GET() {
   const session = getSession();
-  if (!session) return NextResponse.json({ session: null });
+  if (!session) return NextResponse.json({ session: null, tgWidget: tgWidgetConfig() });
   const port = tradingPortFor(session);
   const balanceUnits = await port.getBalance().catch(() => 0n);
+  const tg = await tgLinkState(session);
   return NextResponse.json({
     session: publicSession(session),
     balanceUnits: balanceUnits.toString(),
+    tgWidget: tgWidgetConfig(),
+    tgLinked: tg.linked,
   });
 }
 

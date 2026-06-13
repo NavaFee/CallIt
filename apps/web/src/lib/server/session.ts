@@ -102,6 +102,7 @@ export async function registerSession(): Promise<RegistrationResult> {
 export async function createAccount(opts: {
   provider: 'dev' | 'telegram';
   tgChatId?: number;
+  tgUsername?: string;
   referrerId?: string;
 }): Promise<RegistrationResult> {
   const keypair = Ed25519Keypair.generate();
@@ -150,6 +151,7 @@ export async function createAccount(opts: {
       id: address,
       managerId: session.managerId,
       tgChatId: opts.tgChatId,
+      tgUsername: opts.tgUsername,
       sessionKeySealed: seal(session.sk),
       referrerId: opts.referrerId,
     }).catch((err) => console.error('account persist failed:', err));
