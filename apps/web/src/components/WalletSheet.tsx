@@ -11,6 +11,7 @@ interface WalletInfo {
   coinType: string;
   mock: boolean;
   tgLinked?: boolean;
+  tgUsername?: string | null;
   walletUnits: string;
   managerUnits: string;
   faucetFormUrl: string;
@@ -180,6 +181,42 @@ export function WalletSheet({
               <CopyRow label="YOUR ADDRESS" value={info.address} />
             </div>
           </div>
+        )}
+
+        {/* telegram binding state (the desktop wallet modal carries it) */}
+        {info && info.tgLinked && (
+          <div
+            className="mt-3 flex items-center gap-2.5 rounded-xl border px-3 py-2"
+            style={{ borderColor: 'rgba(0,224,123,0.4)', background: 'rgba(0,224,123,0.06)' }}
+            data-testid="wallet-tg-linked"
+          >
+            <span className="text-[14px]">✓</span>
+            <div className="text-[11.5px] font-black text-up">
+              Telegram linked
+              {info.tgUsername ? <span className="num"> · @{info.tgUsername}</span> : null}
+            </div>
+          </div>
+        )}
+        {info && !info.tgLinked && onLinkTelegram && (
+          <button
+            type="button"
+            className="ci-pressable mt-3 flex w-full items-center gap-2.5 rounded-xl border px-3 py-2 text-left"
+            style={{ borderColor: 'rgba(77,162,255,0.4)', background: 'rgba(77,162,255,0.06)' }}
+            data-testid="wallet-tg-connect"
+            onClick={async () => {
+              if (await onLinkTelegram()) {
+                setInfo((cur) => (cur ? { ...cur, tgLinked: true } : cur));
+              }
+            }}
+          >
+            <span className="text-[14px]">✈️</span>
+            <div className="text-[11.5px] font-black text-sui">
+              Connect Telegram
+              <span className="block text-[10px] font-bold text-muted">
+                daily refill · account on any device · settlement DMs
+              </span>
+            </div>
+          </button>
         )}
 
         {/* deposit / withdraw tabs */}

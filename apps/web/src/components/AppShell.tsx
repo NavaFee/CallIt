@@ -103,8 +103,10 @@ export function AppShell() {
       {tab === 'ranks' && <RanksScreen />}
       {tab === 'profile' && <ProfileScreen address={address} />}
 
+      {/* desktop is a single HUD page (ranks + streak inline, wallet/profile
+          in the top-chip modal); tabs stay on mobile web + the Mini App */}
       <nav
-        className="fixed inset-x-0 bottom-0 z-50 border-t border-line"
+        className="fixed inset-x-0 bottom-0 z-50 border-t border-line lg:hidden"
         style={{ background: 'rgba(11,14,22,0.92)', backdropFilter: 'blur(12px)' }}
         data-testid="tab-bar"
       >

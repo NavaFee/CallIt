@@ -33,6 +33,7 @@ export async function GET() {
     coinType: cfg.dusdcCoinType,
     mock: MOCK_FUNDS,
     tgLinked: tg.linked,
+    tgUsername: tg.username,
     walletUnits: walletUnits.toString(),
     managerUnits: managerUnits.toString(),
     faucetFormUrl:

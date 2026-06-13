@@ -83,13 +83,11 @@ export function PlayScreen() {
     (oracleId: string) => market?.oracles.find((o) => o.oracleId === oracleId)?.spotUsd ?? null,
     [market],
   );
-  // lock line on the chart: the soonest-expiring open call on THIS oracle
-  const chartLockPos = openPositions
+  // lock lines on the chart: one per open call on THIS oracle (Sparkline
+  // de-dupes same-price locks and colours each LOCK pill by side)
+  const chartLocks = openPositions
     .filter((p) => p.market.oracleId === selectedId)
-    .sort((a, b) => Number(a.market.expiry) - Number(b.market.expiry))[0];
-  const chartLock = chartLockPos
-    ? { usd: fixedToUsdNum(chartLockPos.market.strike), isUp: chartLockPos.market.isUp }
-    : null;
+    .map((p) => ({ usd: fixedToUsdNum(p.market.strike), isUp: p.market.isUp }));
 
   // ── session bootstrap (Mini App logs in via initData first) ────────
   useEffect(() => {
@@ -424,11 +422,77 @@ export function PlayScreen() {
   const delta = points.length >= 2 ? points[points.length - 1]! - points[Math.max(0, points.length - 30)]! : 0;
 
   return (
+    <>
+      {/* desktop top bar (design-aligned): logo · BTC ticker · TESTNET ·
+          streak · dUSDC chip → wallet modal. Mobile keeps the compact header. */}
+      {session && (
+        <div
+          className="sticky top-0 z-20 hidden border-b border-line lg:block"
+          style={{ background: 'rgba(11,14,22,0.85)', backdropFilter: 'blur(10px)' }}
+          data-testid="desktop-topbar"
+        >
+          <div className="mx-auto flex h-[60px] max-w-[1280px] items-center gap-4 px-6">
+            <div className="flex items-center gap-2">
+              <div
+                className="flex h-[30px] w-[30px] items-center justify-center rounded-full font-display text-[14px]"
+                style={{
+                  background: 'radial-gradient(circle at 32% 28%, #FFE08A, #FFC53D 55%, #D89B12)',
+                  border: '2px solid #E9A718',
+                  color: '#5B3D00',
+                }}
+              >
+                $
+              </div>
+              <span className="font-display text-[24px]">
+                Call<span className="text-gold">It</span>
+              </span>
+            </div>
+            <div
+              className="num flex items-center gap-2 rounded-full border border-line px-3.5 py-1.5 text-[13px] font-black"
+              style={{ background: 'rgba(255,255,255,0.04)' }}
+            >
+              <span className="text-[10px] tracking-[0.08em] text-muted">BTC</span>
+              <span>{spotUsd != null ? `$${fmtUsd(spotUsd)}` : '—'}</span>
+              <span
+                className="h-1.5 w-1.5 rounded-full bg-up"
+                style={{ boxShadow: '0 0 6px var(--up)', animation: 'ci-glow-pulse 1.4s ease-in-out infinite' }}
+              />
+            </div>
+            <div className="flex-1" />
+            <span
+              className="rounded-full border px-2.5 py-1 text-[9px] font-black tracking-[0.1em] text-sui"
+              style={{ borderColor: 'rgba(77,162,255,0.35)', background: 'rgba(77,162,255,0.1)' }}
+            >
+              SUI TESTNET
+            </span>
+            {streak > 0 && <StreakFlame streak={streak} size={24} />}
+            <button
+              type="button"
+              onClick={() => setWalletOpen(true)}
+              className="ci-pressable flex items-center gap-2 rounded-full border px-3.5 py-1.5"
+              style={{ borderColor: 'rgba(255,197,61,0.4)', background: 'rgba(255,197,61,0.1)' }}
+              data-testid="desktop-wallet-chip"
+            >
+              <span className="num text-[15px] font-black text-gold" data-testid="balance-desktop">
+                {fmtDusdcUnits(balanceUnits)}
+              </span>
+              <span className="text-[11px] font-bold text-muted">dUSDC</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setWalletOpen(true)}
+              className="ci-pressable rounded-full border border-line px-2.5 py-1.5 text-[10px] font-bold text-muted"
+            >
+              {shortAddr(session.address)}
+            </button>
+          </div>
+        </div>
+      )}
     <div className="relative mx-auto lg:grid lg:max-w-[1280px] lg:grid-cols-[290px_minmax(0,1fr)_310px] lg:items-start lg:gap-5 lg:px-6 lg:pt-5">
       <LeftRail positions={positions} spotFor={spotFor} onCashOut={cashOut} />
       <div className="relative mx-auto flex min-h-dvh w-full max-w-md flex-col gap-3 px-4 pb-28 pt-4 lg:min-h-0 lg:max-w-none lg:px-0 lg:pb-8 lg:pt-0">
-      {/* header */}
-      <header className="flex items-center justify-between">
+      {/* header (mobile + Mini App; desktop uses the top bar above) */}
+      <header className="flex items-center justify-between lg:hidden">
         <div className="flex items-center gap-2">
           <div
             className="flex h-7 w-7 items-center justify-center rounded-full font-display text-[13px]"
@@ -500,7 +564,7 @@ export function PlayScreen() {
           </div>
         </div>
         <div className="mt-2">
-          <Sparkline points={points} width={chartW} height={120} up={priceUp} lock={chartLock} />
+          <Sparkline points={points} width={chartW} height={120} up={priceUp} locks={chartLocks} />
         </div>
       </section>
 
@@ -783,5 +847,6 @@ export function PlayScreen() {
       </div>
       <RightRail streak={streak} />
     </div>
+    </>
   );
 }
