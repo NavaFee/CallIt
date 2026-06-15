@@ -1,14 +1,14 @@
 import { NextResponse } from 'next/server';
 import { getSession } from '@/lib/server/session';
-import { socialLeaderboard } from '@/lib/server/social';
+import { socialLeaderboard, socialProfile } from '@/lib/server/social';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 /**
  * Seed personalities from the design prototype (design/js/engine.jsx
- * CI_BOT_SEED) so the board is never an empty wall. Real players always
- * rank above the bots; bots are labeled as such in the UI.
+ * CI_BOT_SEED) so the board is never an empty wall. Real players and bots
+ * share one PnL sort; bots are labeled as such in the UI.
  */
 const BOT_SEED: Array<{ name: string; pnl: number; streak: number }> = [
   { name: 'OracleOtter', pnl: 212.4, streak: 4 },
@@ -50,6 +50,20 @@ export async function GET() {
     calls: r.calls,
     streak: r.streak,
   }));
+  if (session && !realRows.some((r) => r.userId === session.address)) {
+    const stats = await socialProfile(session.address);
+    if (stats && stats.calls > 0) {
+      realRows.push({
+        userId: session.address,
+        name: null,
+        isBot: false,
+        pnlUnits: stats.netPnlUnits,
+        wins: stats.wins,
+        calls: stats.calls,
+        streak: stats.streak.current,
+      });
+    }
+  }
   const botRows: BoardRow[] = BOT_SEED.map((b) => ({
     userId: `bot:${b.name}`,
     name: b.name,
@@ -60,9 +74,13 @@ export async function GET() {
     streak: b.streak,
   }));
 
-  // real players first (sorted by PnL), bots fill out the board below
-  const byPnl = (a: BoardRow, b: BoardRow) => Number(BigInt(b.pnlUnits) - BigInt(a.pnlUnits));
-  const rows = [...realRows.sort(byPnl), ...botRows.sort(byPnl)].slice(0, 50);
+  const byPnl = (a: BoardRow, b: BoardRow) => {
+    const diff = BigInt(b.pnlUnits) - BigInt(a.pnlUnits);
+    if (diff > 0n) return 1;
+    if (diff < 0n) return -1;
+    return a.isBot === b.isBot ? 0 : a.isBot ? 1 : -1;
+  };
+  const rows = [...realRows, ...botRows].sort(byPnl).slice(0, 50);
 
   return NextResponse.json({
     rows,

@@ -98,7 +98,9 @@ export function PlayScreen() {
   const [result, setResult] = useState<ResultData | null>(null);
   const [streak, setStreak] = useState(0);
   const [chartW, setChartW] = useState(343);
+  const [chartH, setChartH] = useState(140);
   const chartRef = useRef<HTMLDivElement>(null);
+  const chartPlotRef = useRef<HTMLDivElement>(null);
   const settling = useRef(false);
   // real-mode settle events repeat until the keeper claims — announce once
   const announced = useRef(new Set<string>());
@@ -244,10 +246,27 @@ export function PlayScreen() {
   }, [spotUsd]);
 
   useEffect(() => {
-    const measure = () => chartRef.current && setChartW(chartRef.current.clientWidth - 28);
+    const measure = () => {
+      const plot = chartPlotRef.current;
+      const card = chartRef.current;
+      const width = plot?.clientWidth ?? (card ? card.clientWidth - 28 : 343);
+      const height = plot?.clientHeight ?? 140;
+      setChartW(Math.max(240, Math.floor(width)));
+      setChartH(Math.max(140, Math.floor(height)));
+    };
     measure();
+    const raf = requestAnimationFrame(measure);
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
+    if (ro) {
+      if (chartPlotRef.current) ro.observe(chartPlotRef.current);
+      if (chartRef.current) ro.observe(chartRef.current);
+    }
     window.addEventListener('resize', measure);
-    return () => window.removeEventListener('resize', measure);
+    return () => {
+      cancelAnimationFrame(raf);
+      ro?.disconnect();
+      window.removeEventListener('resize', measure);
+    };
   }, []);
 
   // ── live two-sided quote ───────────────────────────────────────────
@@ -532,7 +551,7 @@ export function PlayScreen() {
           style={{ background: 'rgba(11,14,22,0.85)', backdropFilter: 'blur(10px)' }}
           data-testid="desktop-topbar"
         >
-          <div className="mx-auto flex h-[60px] max-w-[1280px] items-center gap-4 px-6">
+          <div className="mx-auto flex h-[60px] max-w-[1280px] items-center gap-4 px-6 xl:max-w-[1480px]">
             <div className="flex items-center gap-2">
               <div
                 className="flex h-[30px] w-[30px] items-center justify-center rounded-full font-display text-[14px]"
@@ -589,9 +608,9 @@ export function PlayScreen() {
           </div>
         </div>
       )}
-    <div className="relative mx-auto lg:grid lg:max-w-[1280px] lg:grid-cols-[290px_minmax(0,1fr)_310px] lg:items-start lg:gap-5 lg:px-6 lg:pt-5">
+    <div className="relative mx-auto lg:grid lg:h-[calc(100dvh-60px)] lg:max-w-[1280px] lg:grid-cols-[250px_minmax(0,1fr)_280px] lg:items-stretch lg:gap-5 lg:px-6 lg:py-5 xl:max-w-[1480px] xl:grid-cols-[300px_minmax(0,1fr)_330px] xl:gap-6">
       <LeftRail positions={positions} spotFor={spotFor} onCashOut={cashOut} />
-      <div className="relative mx-auto flex min-h-dvh w-full max-w-md flex-col gap-3 px-4 pb-28 pt-4 lg:min-h-0 lg:max-w-none lg:px-0 lg:pb-8 lg:pt-0">
+      <div className="relative mx-auto flex min-h-dvh w-full max-w-md flex-col gap-3 px-4 pb-28 pt-4 lg:h-full lg:min-h-0 lg:max-w-none lg:gap-4 lg:px-0 lg:pb-0 lg:pt-0">
       {/* header (mobile + Mini App; desktop uses the top bar above) */}
       <header className="flex items-center justify-between lg:hidden">
         <div className="flex items-center gap-2">
@@ -635,7 +654,11 @@ export function PlayScreen() {
       </header>
 
       {/* chart card */}
-      <section ref={chartRef} className="overflow-hidden rounded-[20px] border border-line p-3.5" style={playCardStyle}>
+      <section
+        ref={chartRef}
+        className="overflow-hidden rounded-[20px] border border-line p-3.5 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:p-4"
+        style={playCardStyle}
+      >
         <div className="flex items-start justify-between">
           <div>
             <div className="mb-1 flex items-center gap-2 text-[11px] font-black tracking-[0.12em] text-muted">
@@ -670,13 +693,13 @@ export function PlayScreen() {
             </div>
           </div>
         </div>
-        <div className="mt-2">
+        <div ref={chartPlotRef} className="mt-2 min-h-[140px] lg:mt-3 lg:min-h-0 lg:flex-1">
           {chartReady ? (
-            <Sparkline points={points} width={chartW} height={140} up={priceUp} locks={chartLocks} />
+            <Sparkline points={points} width={chartW} height={chartH} up={priceUp} locks={chartLocks} />
           ) : (
             <div
               className="relative overflow-hidden rounded-2xl bg-white/[0.035]"
-              style={{ width: chartW, height: 140 }}
+              style={{ width: chartW, height: chartH }}
               data-testid="chart-warmup"
             >
               <div
@@ -828,7 +851,7 @@ export function PlayScreen() {
       )}
 
       {/* controls */}
-      <section className="rounded-[20px] border border-line p-3.5" style={playCardStyle}>
+      <section className="rounded-[20px] border border-line p-3.5 lg:p-4" style={playCardStyle}>
         {placing != null ? (
           <div className="flex items-center justify-center gap-3 py-[26px]" style={{ animation: 'ci-pop 0.25s ease-out' }}>
             <div
@@ -843,7 +866,7 @@ export function PlayScreen() {
             </div>
           </div>
         ) : picked == null ? (
-          <div className="flex flex-col gap-3 lg:grid lg:grid-cols-[170px_1fr] lg:items-stretch lg:gap-3.5">
+          <div className="flex flex-col gap-3 lg:grid lg:grid-cols-[176px_1fr] lg:items-stretch lg:gap-4 xl:grid-cols-[190px_1fr]">
             <div className="flex flex-col gap-2 lg:justify-center">
               <div className="hidden text-[10px] font-black tracking-[0.12em] text-muted lg:block">ORACLE EXPIRY</div>
               {market ? (
@@ -878,7 +901,7 @@ export function PlayScreen() {
                       edgeH={8}
                       disabled={!!fuse || !q || !session}
                       onClick={() => setPicked(side)}
-                      className="h-[108px] flex-1 flex-col gap-0.5 rounded-[22px]"
+                      className="h-[108px] flex-1 flex-col gap-0.5 rounded-[22px] xl:h-[124px]"
                       data-testid={`call-${side}`}
                     >
                       <span className="font-display text-[34px] leading-none">{side === 'up' ? '▲' : '▼'}</span>
