@@ -34,7 +34,7 @@ export function StreakFlame({
             height: size * 0.85,
             background: `radial-gradient(circle at 50% 80%, ${core}, ${outer})`,
             borderRadius: `50% 50% 50% 8%`,
-            transform: 'rotate(45deg)',
+            transform: 'rotate(135deg)',
             animation: animate ? 'ci-flame 0.9s ease-in-out infinite' : undefined,
             boxShadow: `0 0 ${size * 0.6}px ${outer}66`,
           }}
@@ -46,7 +46,7 @@ export function StreakFlame({
             height: size * 0.4,
             background: '#FFEDB3',
             borderRadius: `50% 50% 50% 10%`,
-            transform: 'rotate(45deg)',
+            transform: 'rotate(135deg)',
           }}
         />
       </span>

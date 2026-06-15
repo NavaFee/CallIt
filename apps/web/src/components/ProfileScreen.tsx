@@ -20,6 +20,7 @@ const BADGES = [
 interface Stats {
   calls: number;
   wins: number;
+  losses: number;
   cashouts: number;
   netPnlUnits: string;
   streak: { current: number; best: number };
@@ -99,7 +100,8 @@ export function ProfileScreen({ address }: { address: string | null }) {
     return false;
   };
 
-  const winRate = stats && stats.calls > 0 ? Math.round((stats.wins / stats.calls) * 100) : 0;
+  const winRateBase = (stats?.wins ?? 0) + (stats?.losses ?? 0);
+  const winRate = winRateBase > 0 ? Math.round(((stats?.wins ?? 0) / winRateBase) * 100) : 0;
   const pnl = stats ? Number(BigInt(stats.netPnlUnits)) / 1e6 : 0;
   const unlocked = new Set(stats?.badges ?? []);
 

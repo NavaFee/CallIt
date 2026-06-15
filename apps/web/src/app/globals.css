@@ -84,9 +84,9 @@ body {
   50% { opacity: 0.35; }
 }
 @keyframes ci-flame {
-  0%, 100% { transform: rotate(45deg) scale(1); }
-  30% { transform: rotate(43deg) scale(1.08, 0.95); }
-  60% { transform: rotate(47deg) scale(0.94, 1.1); }
+  0%, 100% { transform: rotate(135deg) scale(1); }
+  30% { transform: rotate(133deg) scale(1.08, 0.95); }
+  60% { transform: rotate(137deg) scale(0.94, 1.1); }
 }
 @keyframes ci-flash {
   0% { opacity: 0.9; }

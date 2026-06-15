@@ -105,6 +105,7 @@ export const api = {
       stats: {
         calls: number;
         wins: number;
+        losses: number;
         cashouts: number;
         netPnlUnits: string;
         streak: { current: number; best: number };

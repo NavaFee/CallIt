@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getSession } from '@/lib/server/session';
-import { socialLeaderboard, socialProfile } from '@/lib/server/social';
+import { deriveStatsFromPositions } from '@/lib/server/profileStats';
+import { socialLeaderboard, socialPlayersLeaderboard, socialProfile } from '@/lib/server/social';
+import { tradingPortFor } from '@/lib/server/trading';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -39,7 +41,11 @@ export interface BoardRow {
 
 export async function GET() {
   const session = getSession();
-  const real = (await socialLeaderboard()) ?? [];
+  const [weeklyReal, playerReal] = await Promise.all([
+    socialLeaderboard(),
+    socialPlayersLeaderboard(),
+  ]);
+  const real = playerReal ?? weeklyReal ?? [];
 
   const realRows: BoardRow[] = real.map((r) => ({
     userId: r.userId,
@@ -50,10 +56,10 @@ export async function GET() {
     calls: r.calls,
     streak: r.streak,
   }));
-  if (session && !realRows.some((r) => r.userId === session.address)) {
-    const stats = await socialProfile(session.address);
+  if (session) {
+    const stats = await currentStats(session);
     if (stats && stats.calls > 0) {
-      realRows.push({
+      const row = {
         userId: session.address,
         name: null,
         isBot: false,
@@ -61,7 +67,10 @@ export async function GET() {
         wins: stats.wins,
         calls: stats.calls,
         streak: stats.streak.current,
-      });
+      };
+      const idx = realRows.findIndex((r) => r.userId === session.address);
+      if (idx >= 0) realRows[idx] = row;
+      else realRows.push(row);
     }
   }
   const botRows: BoardRow[] = BOT_SEED.map((b) => ({
@@ -87,4 +96,13 @@ export async function GET() {
     you: session?.address ?? null,
     available: true,
   });
+}
+
+async function currentStats(session: NonNullable<ReturnType<typeof getSession>>) {
+  try {
+    const positions = await tradingPortFor(session).listPositions();
+    return deriveStatsFromPositions(positions);
+  } catch {
+    return socialProfile(session.address);
+  }
 }

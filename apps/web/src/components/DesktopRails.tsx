@@ -97,6 +97,7 @@ export function RightRail({ streak }: { streak: number }) {
   const [stats, setStats] = useState<{
     calls: number;
     wins: number;
+    losses: number;
     netPnlUnits: string;
     streak: { current: number; best: number };
   } | null>(null);
@@ -114,11 +115,14 @@ export function RightRail({ streak }: { streak: number }) {
     return () => clearInterval(t);
   }, []);
 
-  const youIndex = you && rows ? rows.findIndex((row) => row.userId === you) : -1;
-  const boardRows =
-    rows && youIndex >= 9
-      ? [...rows.slice(0, 8), rows[youIndex]!]
-      : (rows?.slice(0, 9) ?? null);
+  const winRateBase = (stats?.wins ?? 0) + (stats?.losses ?? 0);
+  const winRate = winRateBase > 0 ? Math.round(((stats?.wins ?? 0) / winRateBase) * 100) : 0;
+  const boardRows = rows
+    ? [
+        ...rows.slice(0, 8),
+        ...rows.filter((row, index) => index >= 8 && !row.isBot),
+      ]
+    : null;
 
   return (
     <aside className="hidden min-h-0 flex-col gap-3.5 lg:flex lg:h-full">
@@ -156,7 +160,7 @@ export function RightRail({ streak }: { streak: number }) {
           </div>
           <div className="grid grid-cols-3 gap-2">
             {[
-              ['WIN RATE', stats && stats.calls > 0 ? `${Math.round((stats.wins / stats.calls) * 100)}%` : '0%', stats && stats.calls > 0 && stats.wins / stats.calls >= 0.5 ? 'var(--up)' : 'var(--text)'],
+              ['WIN RATE', `${winRate}%`, winRate >= 50 && winRateBase > 0 ? 'var(--up)' : 'var(--text)'],
               ['CALLS', String(stats?.calls ?? 0), 'var(--text)'],
               ['NET P&L', `${Number(BigInt(stats?.netPnlUnits ?? '0')) >= 0 ? '+' : ''}${fmtDusdcUnits(stats?.netPnlUnits ?? '0')}`, Number(BigInt(stats?.netPnlUnits ?? '0')) >= 0 ? 'var(--up)' : 'var(--down)'],
             ].map(([label, value, color]) => (

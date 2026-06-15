@@ -142,9 +142,29 @@ export async function weeklyLeaderboard(db: Db, limit = 50): Promise<Leaderboard
   return rows;
 }
 
+/** All real players with any picks, ranked by realized PnL. */
+export async function playerLeaderboard(db: Db, limit = 50): Promise<LeaderboardRow[]> {
+  const pnlExpr = sql`coalesce(sum(coalesce(${picks.payoutUnits}, 0) - ${picks.costUnits}) filter (where ${picks.status} != 'open'), 0)`;
+  const rows = await db
+    .select({
+      userId: picks.userId,
+      pnlUnits: sql<string>`${pnlExpr}::text`,
+      wins: sql<number>`count(*) filter (where ${picks.status} = 'won')::int`,
+      calls: sql<number>`count(*)::int`,
+      streak: sql<number>`coalesce(max(${streaks.current}), 0)::int`,
+    })
+    .from(picks)
+    .leftJoin(streaks, eq(streaks.userId, picks.userId))
+    .groupBy(picks.userId)
+    .orderBy(desc(pnlExpr))
+    .limit(limit);
+  return rows;
+}
+
 export interface ProfileStats {
   calls: number;
   wins: number;
+  losses: number;
   cashouts: number;
   netPnlUnits: string;
   streak: { current: number; best: number };
@@ -156,6 +176,7 @@ export async function profileStats(db: Db, userId: string): Promise<ProfileStats
     .select({
       calls: sql<number>`count(*)::int`,
       wins: sql<number>`count(*) filter (where ${picks.status} = 'won')::int`,
+      losses: sql<number>`count(*) filter (where ${picks.status} = 'lost')::int`,
       cashouts: sql<number>`count(*) filter (where ${picks.status} = 'cashed_out')::int`,
       pnl: sql<string>`coalesce(sum(coalesce(${picks.payoutUnits}, 0) - ${picks.costUnits}) filter (where ${picks.status} != 'open'), 0)::text`,
     })
@@ -166,6 +187,7 @@ export async function profileStats(db: Db, userId: string): Promise<ProfileStats
   return {
     calls: agg?.calls ?? 0,
     wins: agg?.wins ?? 0,
+    losses: agg?.losses ?? 0,
     cashouts: agg?.cashouts ?? 0,
     netPnlUnits: agg?.pnl ?? '0',
     streak: { current: s?.current ?? 0, best: s?.best ?? 0 },

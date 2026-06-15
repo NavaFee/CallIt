@@ -55,7 +55,7 @@ export function AppShell() {
       {/* guest mode strip: persistent until linked, dismissible */}
       {guestBanner && (
         <div
-          className="flex items-center gap-2 border-b px-4 py-1.5 shadow-none lg:fixed lg:right-6 lg:top-[72px] lg:z-40 lg:max-w-[315px] lg:rounded-full lg:border lg:px-3 lg:py-2 lg:shadow-[0_12px_28px_rgba(0,0,0,0.28)]"
+          className="flex items-center gap-2 border-b px-4 py-1.5 shadow-none lg:fixed lg:bottom-6 lg:right-6 lg:z-40 lg:max-w-[315px] lg:rounded-full lg:border lg:px-3 lg:py-2 lg:shadow-[0_12px_28px_rgba(0,0,0,0.28)]"
           style={{ borderColor: 'rgba(255,197,61,0.35)', background: 'rgba(255,197,61,0.08)' }}
           data-testid="guest-banner"
         >

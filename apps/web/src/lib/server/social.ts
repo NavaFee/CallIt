@@ -2,6 +2,7 @@ import {
   afterPick,
   ensureUser,
   getDb,
+  playerLeaderboard,
   profileStats,
   recordPick,
   resolvePick,
@@ -76,6 +77,17 @@ export async function socialLeaderboard() {
     return await weeklyLeaderboard(db);
   } catch (err) {
     console.error('social leaderboard failed:', err);
+    return null;
+  }
+}
+
+export async function socialPlayersLeaderboard() {
+  const db = getDb();
+  if (!db) return null;
+  try {
+    return await playerLeaderboard(db);
+  } catch (err) {
+    console.error('social players leaderboard failed:', err);
     return null;
   }
 }

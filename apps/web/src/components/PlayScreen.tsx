@@ -866,8 +866,8 @@ export function PlayScreen() {
             </div>
           </div>
         ) : picked == null ? (
-          <div className="flex flex-col gap-3 lg:grid lg:grid-cols-[176px_1fr] lg:items-stretch lg:gap-4 xl:grid-cols-[190px_1fr]">
-            <div className="flex flex-col gap-2 lg:justify-center">
+          <div className="flex flex-col gap-3 lg:grid lg:min-h-[176px] lg:grid-cols-[176px_minmax(0,1fr)] lg:items-center lg:gap-5 xl:grid-cols-[190px_minmax(0,1fr)]">
+            <div className="flex flex-col gap-2 lg:justify-center lg:self-center">
               <div className="hidden text-[10px] font-black tracking-[0.12em] text-muted lg:block">ORACLE EXPIRY</div>
               {market ? (
                 <ExpiryChips oracles={market.oracles} selected={selectedId} onSelect={setSelectedId} />
@@ -890,8 +890,8 @@ export function PlayScreen() {
                 odds refresh off the live vol surface
               </div>
             </div>
-            <div className="flex flex-col gap-2.5">
-              <div className="flex gap-3">
+            <div className="flex flex-col gap-2.5 lg:mx-auto lg:w-full lg:max-w-[720px] lg:justify-center">
+              <div className="flex gap-3 lg:justify-center">
                 {(['up', 'down'] as const).map((side) => {
                   const q = quote?.[side];
                   return (
@@ -901,7 +901,7 @@ export function PlayScreen() {
                       edgeH={8}
                       disabled={!!fuse || !q || !session}
                       onClick={() => setPicked(side)}
-                      className="h-[108px] flex-1 flex-col gap-0.5 rounded-[22px] xl:h-[124px]"
+                      className="h-[108px] flex-1 flex-col gap-0.5 rounded-[22px] lg:max-w-[320px] xl:h-[124px]"
                       data-testid={`call-${side}`}
                     >
                       <span className="font-display text-[34px] leading-none">{side === 'up' ? '▲' : '▼'}</span>

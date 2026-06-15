@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import { applyResult, earnedBadges } from '@callit/db';
-import type { Position } from '@callit/core';
 import { getSession } from '@/lib/server/session';
+import { deriveStatsFromPositions } from '@/lib/server/profileStats';
 import { socialProfile } from '@/lib/server/social';
 import { tgLinkState } from '@/lib/server/tgState';
 import { tradingPortFor } from '@/lib/server/trading';
@@ -17,59 +16,21 @@ export async function GET() {
   const tgLinked = tg.linked;
   const tgUsername = tg.username;
 
-  const dbStats = await socialProfile(session.address);
-  if (dbStats) {
-    return NextResponse.json({ stats: dbStats, tgLinked, tgUsername, available: true });
-  }
-
-  // No database: derive the same stats from the session's positions so the
-  // profile never contradicts the play screen, whatever the deployment.
+  // Positions are the source of truth for what the play screen shows; derive
+  // stats from them first so win rate / calls / P&L never contradict the HUD.
   try {
     const positions = await tradingPortFor(session).listPositions();
     return NextResponse.json({
-      stats: deriveStats(positions),
+      stats: deriveStatsFromPositions(positions),
       tgLinked,
       tgUsername,
       available: true,
     });
-  } catch {
-    return NextResponse.json({ stats: null, tgLinked, tgUsername, available: false });
+  } catch {}
+
+  const dbStats = await socialProfile(session.address);
+  if (dbStats) {
+    return NextResponse.json({ stats: dbStats, tgLinked, tgUsername, available: true });
   }
-}
-
-function deriveStats(positions: Position[]) {
-  const closed = positions
-    .filter((p) => p.status !== 'open')
-    .sort((a, b) => (a.settledAt ?? a.placedAt) - (b.settledAt ?? b.placedAt));
-
-  let streak = { current: 0, best: 0 };
-  let netPnl = 0n;
-  let wins = 0;
-  let cashouts = 0;
-  let maxStakeUnits = 0n;
-
-  for (const p of positions) {
-    if (p.costUnits > maxStakeUnits) maxStakeUnits = p.costUnits;
-  }
-  for (const p of closed) {
-    netPnl += (p.payoutUnits ?? 0n) - p.costUnits;
-    if (p.status === 'won') wins += 1;
-    if (p.status === 'cashed_out') cashouts += 1;
-    streak = applyResult(streak, p.status as 'won' | 'lost' | 'cashed_out');
-  }
-
-  return {
-    calls: positions.length,
-    wins,
-    cashouts,
-    netPnlUnits: netPnl.toString(),
-    streak,
-    badges: earnedBadges({
-      calls: positions.length,
-      wins,
-      cashouts,
-      bestStreak: streak.best,
-      maxStakeUnits,
-    }),
-  };
+  return NextResponse.json({ stats: null, tgLinked, tgUsername, available: false });
 }
