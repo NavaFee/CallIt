@@ -15,6 +15,7 @@ import type { OracleRow } from './types.js';
  */
 export class OracleCache {
   private memory: { fetchedAt: number; rows: OracleRow[] } | null = null;
+  private refresh: Promise<void> | null = null;
 
   constructor(
     private readonly indexer: PredictIndexerClient,
@@ -33,19 +34,31 @@ export class OracleCache {
       this.memory = cached;
       return { rows: cached.rows, stale: false };
     }
-    try {
-      const rows = await this.indexer.oracles(this.predictId);
-      this.memory = { fetchedAt: now, rows };
-      this.writeDisk(this.memory);
-      return { rows, stale: false };
-    } catch (err) {
-      if (cached) {
-        // serve stale rather than failing the whole flow
-        this.memory = cached;
-        return { rows: cached.rows, stale: true };
-      }
-      throw err;
+    if (cached) {
+      this.memory = cached;
+      this.refreshInBackground();
+      return { rows: cached.rows, stale: true };
     }
+    const rows = await this.indexer.oracles(this.predictId);
+    this.memory = { fetchedAt: now, rows };
+    this.writeDisk(this.memory);
+    return { rows, stale: false };
+  }
+
+  private refreshInBackground(): void {
+    if (this.refresh) return;
+    this.refresh = this.indexer
+      .oracles(this.predictId)
+      .then((rows) => {
+        this.memory = { fetchedAt: Date.now(), rows };
+        this.writeDisk(this.memory);
+      })
+      .catch(() => {
+        // the caller already received stale data; try again on the next poll
+      })
+      .finally(() => {
+        this.refresh = null;
+      });
   }
 
   async getActive(): Promise<{ rows: OracleRow[]; stale: boolean }> {

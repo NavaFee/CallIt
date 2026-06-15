@@ -41,6 +41,46 @@ interface UnseenWire {
   settledAt: number;
 }
 
+const playCardStyle = {
+  background: 'linear-gradient(180deg, var(--card-2), var(--card))',
+  boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
+};
+
+function OddsPill({
+  side,
+  value,
+  seq,
+  compact = false,
+}: {
+  side: 'up' | 'down';
+  value: number | null;
+  seq: number;
+  compact?: boolean;
+}) {
+  const color = side === 'up' ? 'var(--up)' : 'var(--down)';
+  return (
+    <div
+      className="relative flex items-center gap-1 overflow-hidden rounded-full border border-line bg-white/[0.06]"
+      style={{ padding: compact ? '3px 10px' : '5px 12px' }}
+    >
+      <span className="font-black" style={{ color, fontSize: compact ? 11 : 12 }}>
+        {side === 'up' ? '▲' : '▼'}
+      </span>
+      <span className="num font-black text-ink" style={{ fontSize: compact ? 13 : 15 }}>
+        {value == null ? '×—' : `×${value.toFixed(2)}`}
+      </span>
+      <span
+        key={seq}
+        className="absolute inset-y-0 left-0 w-[45%]"
+        style={{
+          background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.22), transparent)',
+          animation: seq > 0 ? 'ci-shimmer 0.9s ease-out' : undefined,
+        }}
+      />
+    </div>
+  );
+}
+
 export function PlayScreen() {
   const toast = useToast();
 
@@ -473,6 +513,14 @@ export function PlayScreen() {
   // ── render ─────────────────────────────────────────────────────────
   const priceUp = points.length >= 2 ? points[points.length - 1]! >= points[Math.max(0, points.length - 30)]! : true;
   const delta = points.length >= 2 ? points[points.length - 1]! - points[Math.max(0, points.length - 30)]! : 0;
+  const chartReady = points.length >= 2;
+  const marketStatus = offline >= 2 ? 'MARKET DATA RETRYING' : 'MARKET DATA WARMING';
+  const marketDetail =
+    offline >= 2
+      ? 'The indexer is slow right now — retrying automatically.'
+      : 'Loading live DeepBook Predict oracles and odds.';
+  const upMultiplier = quote?.up.multiplier ?? null;
+  const downMultiplier = quote?.down.multiplier ?? null;
 
   return (
     <>
@@ -587,16 +635,16 @@ export function PlayScreen() {
       </header>
 
       {/* chart card */}
-      <section ref={chartRef} className="rounded-3xl border border-line bg-card p-3.5">
+      <section ref={chartRef} className="overflow-hidden rounded-[20px] border border-line p-3.5" style={playCardStyle}>
         <div className="flex items-start justify-between">
           <div>
-            <div className="flex items-center gap-1.5 text-[11px] font-black tracking-wide text-muted">
+            <div className="mb-1 flex items-center gap-2 text-[11px] font-black tracking-[0.12em] text-muted">
               BTC · USD
               <span
-                className="ml-1 h-1.5 w-1.5 rounded-full bg-up"
-                style={{ animation: 'ci-glow-pulse 1.4s ease-in-out infinite' }}
+                className="h-1.5 w-1.5 rounded-full bg-up"
+                style={{ boxShadow: '0 0 6px var(--up)', animation: 'ci-glow-pulse 1.4s ease-in-out infinite' }}
               />
-              <span className="text-up">LIVE</span>
+              <span className="text-[9px] tracking-[0.1em] text-up">LIVE</span>
               {selected?.priceAgeMs != null && (
                 <span className="num text-muted opacity-70">{Math.round(selected.priceAgeMs / 1000)}s</span>
               )}
@@ -606,18 +654,49 @@ export function PlayScreen() {
               TESTNET ORACLE FEED — NOT SPOT BTC
             </div>
           </div>
-          <div
-            className="num rounded-full px-2.5 py-1 text-[12px] font-black"
-            style={{
-              background: priceUp ? 'var(--up-glow)' : 'var(--down-glow)',
-              color: priceUp ? 'var(--up)' : 'var(--down)',
-            }}
-          >
-            {priceUp ? '▲' : '▼'} {fmtUsd(Math.abs(delta))}
+          <div className="flex items-center gap-2">
+            <div className="hidden items-center gap-2 lg:flex">
+              <OddsPill side="up" value={upMultiplier} seq={quoteSeq} />
+              <OddsPill side="down" value={downMultiplier} seq={quoteSeq} />
+            </div>
+            <div
+              className="num rounded-full px-2.5 py-1 text-[12px] font-black"
+              style={{
+                background: priceUp ? 'var(--up-glow)' : 'var(--down-glow)',
+                color: priceUp ? 'var(--up)' : 'var(--down)',
+              }}
+            >
+              {priceUp ? '▲' : '▼'} {fmtUsd(Math.abs(delta))}
+            </div>
           </div>
         </div>
         <div className="mt-2">
-          <Sparkline points={points} width={chartW} height={120} up={priceUp} locks={chartLocks} />
+          {chartReady ? (
+            <Sparkline points={points} width={chartW} height={140} up={priceUp} locks={chartLocks} />
+          ) : (
+            <div
+              className="relative overflow-hidden rounded-2xl bg-white/[0.035]"
+              style={{ width: chartW, height: 140 }}
+              data-testid="chart-warmup"
+            >
+              <div
+                className="absolute inset-x-4 top-1/2 h-px"
+                style={{
+                  background: 'linear-gradient(90deg, transparent, rgba(139,147,172,0.35), transparent)',
+                }}
+              />
+              <div
+                className="absolute inset-y-0 left-0 w-1/2"
+                style={{
+                  background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent)',
+                  animation: 'ci-shimmer 1.4s ease-in-out infinite',
+                }}
+              />
+              <div className="absolute inset-0 flex items-center justify-center text-[10px] font-black tracking-[0.14em] text-muted">
+                {marketStatus}
+              </div>
+            </div>
+          )}
         </div>
       </section>
 
@@ -749,73 +828,104 @@ export function PlayScreen() {
       )}
 
       {/* controls */}
-      <section className="rounded-3xl border border-line bg-card p-3.5">
-        {market ? (
-          <ExpiryChips oracles={market.oracles} selected={selectedId} onSelect={setSelectedId} />
-        ) : (
-          <div className="py-2 text-center text-[12px] font-bold text-muted">loading markets…</div>
-        )}
-
+      <section className="rounded-[20px] border border-line p-3.5" style={playCardStyle}>
         {placing != null ? (
-          <div className="mt-4 flex flex-col items-center gap-3 py-5">
+          <div className="flex items-center justify-center gap-3 py-[26px]" style={{ animation: 'ci-pop 0.25s ease-out' }}>
             <div
-              className="h-[26px] w-[26px] rounded-full border-4 border-white/10"
+              className="h-[26px] w-[26px] shrink-0 rounded-full border-[3px] border-white/10"
               style={{
                 borderTopColor: placing >= 1 ? 'var(--sui)' : picked === 'down' ? 'var(--down)' : 'var(--up)',
                 animation: 'ci-ring-spin 0.7s linear infinite',
               }}
             />
-            <div className="text-[13px] font-extrabold text-muted" key={placing} style={{ animation: 'ci-rise 0.3s ease-out' }}>
+            <div className="text-[16px] font-black text-ink" key={placing} style={{ animation: 'ci-rise 0.25s ease-out' }}>
               {placing === 0 ? 'Signing transaction…' : placing === 1 ? 'Submitting to Sui…' : 'Locked ✓'}
             </div>
           </div>
         ) : picked == null ? (
-          <>
-            <div className="mt-3 flex gap-3">
-              {(['up', 'down'] as const).map((side) => {
-                const q = quote?.[side];
-                return (
-                  <ChunkyButton
-                    key={side}
-                    hue={side}
-                    edgeH={8}
-                    disabled={!!fuse || !q || !session}
-                    onClick={() => setPicked(side)}
-                    className="h-[104px] flex-1 flex-col gap-0.5 rounded-[22px]"
-                    data-testid={`call-${side}`}
-                  >
-                    <span className="font-display text-[32px] leading-none">{side === 'up' ? '▲' : '▼'}</span>
-                    <span className="text-[20px] tracking-wide">{side.toUpperCase()}</span>
-                    <span className="relative overflow-hidden rounded px-1 text-[13px] font-black opacity-80">
-                      {q ? `×${q[side === 'up' ? 'multiplier' : 'multiplier'].toFixed(2)}` : '—'}
-                      <span
-                        key={quoteSeq}
-                        className="absolute inset-y-0 left-0 w-[45%]"
-                        style={{
-                          background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.22), transparent)',
-                          animation: quoteSeq > 0 ? 'ci-shimmer 0.9s ease-out' : undefined,
-                        }}
-                      />
-                    </span>
-                  </ChunkyButton>
-                );
-              })}
+          <div className="flex flex-col gap-3 lg:grid lg:grid-cols-[170px_1fr] lg:items-stretch lg:gap-3.5">
+            <div className="flex flex-col gap-2 lg:justify-center">
+              <div className="hidden text-[10px] font-black tracking-[0.12em] text-muted lg:block">ORACLE EXPIRY</div>
+              {market ? (
+                <ExpiryChips oracles={market.oracles} selected={selectedId} onSelect={setSelectedId} />
+              ) : (
+                <div
+                  className="rounded-2xl border border-line bg-white/[0.04] px-4 py-3 text-center"
+                  data-testid="market-warmup"
+                >
+                  <div className="flex items-center justify-center gap-2">
+                    <span
+                      className="h-3 w-3 rounded-full border-2 border-white/10"
+                      style={{ borderTopColor: 'var(--gold)', animation: 'ci-ring-spin 0.8s linear infinite' }}
+                    />
+                    <span className="font-display text-[15px] text-gold">{marketStatus}</span>
+                  </div>
+                  <div className="mt-1 text-[11px] font-bold text-muted">{marketDetail}</div>
+                </div>
+              )}
+              <div className="hidden text-center text-[10px] font-extrabold text-muted lg:block">
+                odds refresh off the live vol surface
+              </div>
             </div>
-            <div className="mt-2.5 text-center text-[10.5px] font-bold text-muted">
-              odds refresh off the live vol surface · strike {quote ? `$${fmtUsd(quote.strikeUsd, 0)}` : '—'}
+            <div className="flex flex-col gap-2.5">
+              <div className="flex gap-3">
+                {(['up', 'down'] as const).map((side) => {
+                  const q = quote?.[side];
+                  return (
+                    <ChunkyButton
+                      key={side}
+                      hue={side}
+                      edgeH={8}
+                      disabled={!!fuse || !q || !session}
+                      onClick={() => setPicked(side)}
+                      className="h-[108px] flex-1 flex-col gap-0.5 rounded-[22px]"
+                      data-testid={`call-${side}`}
+                    >
+                      <span className="font-display text-[34px] leading-none">{side === 'up' ? '▲' : '▼'}</span>
+                      <span className="font-display text-[21px] tracking-[0.04em]">{side.toUpperCase()}</span>
+                      <span className="relative overflow-hidden rounded px-1 text-[13px] font-black opacity-80">
+                        {q ? `×${q.multiplier.toFixed(2)}` : '—'}
+                        <span
+                          key={quoteSeq}
+                          className="absolute inset-y-0 left-0 w-[45%]"
+                          style={{
+                            background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.22), transparent)',
+                            animation: quoteSeq > 0 ? 'ci-shimmer 0.9s ease-out' : undefined,
+                          }}
+                        />
+                      </span>
+                    </ChunkyButton>
+                  );
+                })}
+              </div>
+              <div className="flex items-center justify-center gap-2 lg:hidden">
+                <OddsPill side="up" value={upMultiplier} seq={quoteSeq} compact />
+                <span className="text-[10px] font-black tracking-[0.1em] text-muted">LIVE ODDS · VOL SURFACE</span>
+                <OddsPill side="down" value={downMultiplier} seq={quoteSeq} compact />
+              </div>
+              <div className="text-center text-[10.5px] font-bold text-muted">
+                strike {quote ? `$${fmtUsd(quote.strikeUsd, 0)}` : '—'}
+              </div>
             </div>
-          </>
+          </div>
         ) : (
-          <div className="mt-3" style={{ animation: 'ci-rise 0.25s ease-out' }}>
+          <div className="flex flex-col gap-3" style={{ animation: 'ci-rise 0.25s ease-out' }}>
             <div className="flex items-center justify-between">
-              <span className="font-display text-[19px]" style={{ color: picked === 'up' ? 'var(--up)' : 'var(--down)' }}>
-                {picked === 'up' ? '▲ CALLING UP' : '▼ CALLING DOWN'}
-              </span>
-              <button type="button" className="text-[12px] font-black text-muted" onClick={() => setPicked(null)}>
-                ✕ cancel
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="font-display text-[20px] whitespace-nowrap" style={{ color: picked === 'up' ? 'var(--up)' : 'var(--down)' }}>
+                  {picked === 'up' ? '▲ CALLING UP' : '▼ CALLING DOWN'}
+                </span>
+                {quote && (
+                  <span className="num text-[13px] font-black text-muted">
+                    ×{quote[picked].multiplier.toFixed(2)}
+                  </span>
+                )}
+              </div>
+              <button type="button" className="px-2 py-1 text-[13px] font-black text-muted" onClick={() => setPicked(null)}>
+                Cancel
               </button>
             </div>
-            <div className="mt-3 flex gap-2">
+            <div className="flex gap-2">
               {STAKES.map((s) => {
                 const active = s === stake;
                 const tooMuch = BigInt(Math.round(s * 1e6)) > BigInt(balanceUnits);
@@ -825,7 +935,7 @@ export function PlayScreen() {
                     type="button"
                     disabled={tooMuch}
                     onClick={() => setStake(s)}
-                    className="ci-pressable flex-1 rounded-xl py-2.5 text-[15px] font-black"
+                    className="ci-pressable flex-1 rounded-[14px] py-3 text-[17px] font-black"
                     style={{
                       background: active
                         ? `linear-gradient(180deg, ${picked === 'up' ? 'var(--up-hi)' : 'var(--down-hi)'}, ${picked === 'up' ? 'var(--up)' : 'var(--down)'})`
@@ -833,6 +943,7 @@ export function PlayScreen() {
                       border: `1.5px solid ${active ? 'transparent' : 'var(--line)'}`,
                       color: active ? (picked === 'up' ? '#06291A' : '#2B0410') : 'var(--text)',
                       opacity: tooMuch ? 0.35 : 1,
+                      boxShadow: active ? `0 3px 0 ${picked === 'up' ? 'var(--up-edge)' : 'var(--down-edge)'}` : undefined,
                     }}
                     data-testid={`stake-${s}`}
                   >
@@ -846,12 +957,12 @@ export function PlayScreen() {
               edgeH={6}
               disabled={!quote || BigInt(Math.round(stake * 1e6)) > BigInt(balanceUnits)}
               onClick={placeBet}
-              className="mt-3 h-[62px] w-full flex-col gap-0 text-[19px]"
+              className="h-[62px] w-full flex-col gap-1"
               data-testid="lock-button"
             >
-              LOCK IT IN
+              <span className="font-display text-[20px]">LOCK IT IN</span>
               {quote && (
-                <span className="num text-[12px] font-black opacity-75">
+                <span className="num text-[14px] font-black opacity-75">
                   win {fmtDusdcUnits(quote[picked].quantityUnits)} dUSDC
                 </span>
               )}

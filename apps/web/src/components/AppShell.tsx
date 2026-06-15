@@ -55,13 +55,14 @@ export function AppShell() {
       {/* guest mode strip: persistent until linked, dismissible */}
       {guestBanner && (
         <div
-          className="flex items-center gap-2 border-b px-4 py-1.5"
+          className="flex items-center gap-2 border-b px-4 py-1.5 shadow-none lg:fixed lg:right-6 lg:top-[72px] lg:z-40 lg:max-w-[315px] lg:rounded-full lg:border lg:px-3 lg:py-2 lg:shadow-[0_12px_28px_rgba(0,0,0,0.28)]"
           style={{ borderColor: 'rgba(255,197,61,0.35)', background: 'rgba(255,197,61,0.08)' }}
           data-testid="guest-banner"
         >
           <span className="flex-1 text-[10.5px] font-bold text-muted">
-            <span className="font-black text-gold">Guest mode</span> — link Telegram to secure your
-            account
+            <span className="font-black text-gold">Guest mode</span>
+            <span className="lg:hidden"> — link Telegram to secure your account</span>
+            <span className="hidden lg:inline"> · secure account</span>
           </span>
           <button
             type="button"

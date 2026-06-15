@@ -11,7 +11,17 @@ const TIER_CORES: [string, string][] = [
   ['#9D5CFF', '#4DA2FF'],
 ];
 
-export function StreakFlame({ streak, size = 18 }: { streak: number; size?: number }) {
+export function StreakFlame({
+  streak,
+  size = 18,
+  showCount = true,
+  animate = true,
+}: {
+  streak: number;
+  size?: number;
+  showCount?: boolean;
+  animate?: boolean;
+}) {
   const tier = streak >= 7 ? 3 : streak >= 5 ? 2 : streak >= 3 ? 1 : 0;
   const [core, outer] = TIER_CORES[tier]!;
   return (
@@ -25,7 +35,7 @@ export function StreakFlame({ streak, size = 18 }: { streak: number; size?: numb
             background: `radial-gradient(circle at 50% 80%, ${core}, ${outer})`,
             borderRadius: `50% 50% 50% 8%`,
             transform: 'rotate(45deg)',
-            animation: 'ci-flame 0.9s ease-in-out infinite',
+            animation: animate ? 'ci-flame 0.9s ease-in-out infinite' : undefined,
             boxShadow: `0 0 ${size * 0.6}px ${outer}66`,
           }}
         />
@@ -40,7 +50,7 @@ export function StreakFlame({ streak, size = 18 }: { streak: number; size?: numb
           }}
         />
       </span>
-      <span className="num font-display text-[14px] text-gold">×{streak}</span>
+      {showCount && <span className="num font-display text-[14px] text-gold">×{streak}</span>}
     </span>
   );
 }

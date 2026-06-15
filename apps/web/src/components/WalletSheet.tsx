@@ -19,6 +19,10 @@ interface WalletInfo {
 
 const HOLD_MS = 650;
 
+function SkeletonBlock({ className }: { className: string }) {
+  return <span aria-hidden="true" className={`inline-block animate-pulse rounded-md bg-white/[0.08] ${className}`} />;
+}
+
 function CopyRow({ label, value, mono = true }: { label: string; value: string; mono?: boolean }) {
   const toast = useToast();
   return (
@@ -67,21 +71,34 @@ export function WalletSheet({
 
   useEffect(() => {
     if (!open) return;
+    let alive = true;
+    setInfo(null);
+    setQr(null);
     fetch('/api/wallet', { cache: 'no-store' })
-      .then((r) => r.json())
-      .then((data: WalletInfo) => {
+      .then(async (r) => {
+        if (!r.ok) throw new Error('wallet info failed to load');
+        return (await r.json()) as WalletInfo;
+      })
+      .then(async (data) => {
+        if (!alive) return;
         setInfo(data);
-        return QRCode.toDataURL(data.address, {
+        const nextQr = await QRCode.toDataURL(data.address, {
           margin: 1,
           width: 168,
           color: { dark: '#F2F5FF', light: '#141927' },
         });
+        if (alive) setQr(nextQr);
       })
-      .then(setQr)
-      .catch(() => toast.push('error', 'wallet info failed to load'));
+      .catch(() => {
+        if (alive) toast.push('error', 'wallet info failed to load');
+      });
+    return () => {
+      alive = false;
+    };
   }, [open, toast]);
 
-  const totalUnits = info ? BigInt(info.walletUnits) + BigInt(info.managerUnits) : 0n;
+  const loading = info === null;
+  const totalUnits = info ? BigInt(info.walletUnits) + BigInt(info.managerUnits) : null;
 
   const submitWithdraw = async () => {
     if (!info || busy) return;
@@ -151,26 +168,51 @@ export function WalletSheet({
 
         {/* layered balances */}
         <div className="mt-4 text-center">
-          <div className="num font-display text-[40px] text-gold" style={{ textShadow: '0 0 24px rgba(255,197,61,0.3)' }}>
-            {fmtDusdcUnits(totalUnits.toString())}
+          <div
+            className="num flex min-h-[48px] items-center justify-center font-display text-[40px] text-gold"
+            style={{ textShadow: '0 0 24px rgba(255,197,61,0.3)' }}
+          >
+            {totalUnits === null ? (
+              <SkeletonBlock className="h-10 w-36 rounded-xl" />
+            ) : (
+              fmtDusdcUnits(totalUnits.toString())
+            )}
           </div>
-          <div className="text-[10px] font-black tracking-[0.12em] text-muted">TOTAL dUSDC</div>
+          <div className="text-[10px] font-black tracking-[0.12em] text-muted">
+            {loading ? 'SYNCING BALANCE' : 'TOTAL dUSDC'}
+          </div>
         </div>
         <div className="mt-3 grid grid-cols-2 gap-2">
           <div className="rounded-xl border border-line bg-white/[0.03] px-3 py-2 text-center">
             <div className="text-[9px] font-black tracking-[0.1em] text-muted">
               {info?.mock ? 'PRACTICE BALANCE' : 'WALLET'}
             </div>
-            <div className="num font-display text-[17px]">{info ? fmtDusdcUnits(info.walletUnits) : '—'}</div>
+            <div className="num flex min-h-[22px] items-center justify-center font-display text-[17px]">
+              {info === null ? <SkeletonBlock className="h-4 w-16" /> : fmtDusdcUnits(info.walletUnits)}
+            </div>
           </div>
           <div className="rounded-xl border border-line bg-white/[0.03] px-3 py-2 text-center">
             <div className="text-[9px] font-black tracking-[0.1em] text-muted">IN TRADING ACCOUNT</div>
-            <div className="num font-display text-[17px]">{info ? fmtDusdcUnits(info.managerUnits) : '—'}</div>
+            <div className="num flex min-h-[22px] items-center justify-center font-display text-[17px]">
+              {info === null ? <SkeletonBlock className="h-4 w-16" /> : fmtDusdcUnits(info.managerUnits)}
+            </div>
           </div>
         </div>
 
         {/* address + QR */}
-        {info && (
+        {loading ? (
+          <div className="mt-4 flex items-start gap-3">
+            <SkeletonBlock className="h-[84px] w-[84px] rounded-lg" />
+            <div className="min-w-0 flex-1 rounded-xl border border-line bg-white/[0.03] px-3 py-2.5">
+              <div className="flex items-center justify-between">
+                <SkeletonBlock className="h-3 w-20" />
+                <SkeletonBlock className="h-5 w-12 rounded-md" />
+              </div>
+              <SkeletonBlock className="mt-2 h-4 w-full" />
+              <SkeletonBlock className="mt-1 h-4 w-2/3" />
+            </div>
+          </div>
+        ) : info && (
           <div className="mt-4 flex items-start gap-3">
             {qr && (
               // QR of the session address — scan from any Sui wallet to deposit
@@ -225,8 +267,9 @@ export function WalletSheet({
             <button
               key={t}
               type="button"
+              disabled={loading}
               onClick={() => setTab(t)}
-              className="ci-pressable flex-1 rounded-xl py-2 text-[12px] font-black tracking-wide"
+              className="ci-pressable flex-1 rounded-xl py-2 text-[12px] font-black tracking-wide disabled:opacity-50"
               style={{
                 background: tab === t ? 'linear-gradient(180deg, #2A3450, #1E2740)' : 'rgba(255,255,255,0.04)',
                 border: `1.5px solid ${tab === t ? 'var(--gold)' : 'var(--line)'}`,
@@ -238,6 +281,15 @@ export function WalletSheet({
             </button>
           ))}
         </div>
+
+        {loading && (
+          <div
+            className="mt-3 rounded-2xl border border-line bg-white/[0.03] px-4 py-3 text-center text-[11.5px] font-bold text-muted"
+            data-testid="wallet-loading"
+          >
+            Loading wallet routes and balances...
+          </div>
+        )}
 
         {/* deposit safety gate: real coins need a recoverable account */}
         {tab === 'deposit' && info && info.tgLinked === false && onLinkTelegram && (
@@ -292,7 +344,8 @@ export function WalletSheet({
         )}
 
         {tab === 'withdraw' &&
-          (info?.mock ? (
+          info &&
+          (info.mock ? (
             <p className="mt-3 rounded-xl border border-line bg-white/[0.03] px-3 py-3 text-[11.5px] font-bold text-muted">
               Practice funds live in a simulated ledger and can’t be withdrawn. On the real-custody
               deployment this tab sends dUSDC to any Sui address, gas-free.
@@ -319,7 +372,7 @@ export function WalletSheet({
                 <button
                   type="button"
                   className="rounded-xl border border-line px-3 text-[11px] font-black text-gold"
-                  onClick={() => setAmount((Number(totalUnits) / 1e6).toFixed(2))}
+                  onClick={() => setAmount((Number(totalUnits ?? 0n) / 1e6).toFixed(2))}
                 >
                   MAX
                 </button>

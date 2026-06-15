@@ -1,11 +1,26 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
 import { api } from '@/lib/api';
 import { fixedToUsdNum, fmtDusdcUnits, fmtUsd, shortAddr } from '@/lib/format';
 import type { EnrichedPosition } from './OpenCalls';
 import { OpenCallCard } from './OpenCalls';
 import { StreakFlame } from './StreakFlame';
+
+const cardStyle = {
+  background: 'linear-gradient(180deg, var(--card-2), var(--card))',
+  boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
+};
+
+function RailTitle({ children, right }: { children: string; right?: ReactNode }) {
+  return (
+    <div className="flex items-center justify-between px-1 pb-2 pt-0.5">
+      <h2 className="font-display text-[15px] tracking-[0.05em] text-ink">{children}</h2>
+      {right}
+    </div>
+  );
+}
 
 /** Left rail (≥1024px): open calls + recent settlements. */
 export function LeftRail({
@@ -20,12 +35,12 @@ export function LeftRail({
   const open = positions.filter((p) => p.status === 'open');
   const closed = positions.filter((p) => p.status !== 'open').slice(0, 12);
   return (
-    <aside className="hidden flex-col gap-3 lg:flex">
-      <h2 className="px-1 text-[10px] font-black tracking-[0.14em] text-muted">OPEN CALLS</h2>
+    <aside className="hidden flex-col gap-3.5 lg:flex">
+      <RailTitle>OPEN CALLS</RailTitle>
       {open.length === 0 ? (
-        <div className="rounded-2xl border border-line bg-card px-4 py-6 text-center">
-          <div className="font-display text-[14px] text-muted">NO OPEN CALLS</div>
-          <div className="mt-1 text-[11px] font-bold text-muted">The chart is waiting — make one.</div>
+        <div className="rounded-[20px] border border-line px-4 py-[22px] text-center" style={cardStyle}>
+          <div className="font-display text-[15px] text-muted">NO OPEN CALLS</div>
+          <div className="mt-1 text-[12px] font-extrabold text-muted opacity-70">The chart is waiting — make one.</div>
         </div>
       ) : (
         open.map((p) => (
@@ -33,10 +48,12 @@ export function LeftRail({
         ))
       )}
 
-      <h2 className="mt-2 px-1 text-[10px] font-black tracking-[0.14em] text-muted">SETTLEMENTS</h2>
-      <div className="flex-1 overflow-y-auto rounded-2xl border border-line bg-card p-2">
+      <RailTitle>SETTLEMENTS</RailTitle>
+      <div className="flex-1 overflow-y-auto rounded-[20px] border border-line p-1" style={cardStyle}>
         {closed.length === 0 ? (
-          <div className="py-5 text-center text-[11px] font-bold text-muted">Nothing settled yet</div>
+          <div className="px-3 py-5 text-center text-[12px] font-extrabold text-muted">
+            Settled calls land here automatically.
+          </div>
         ) : (
           closed.map((p) => {
             const pnl = BigInt(p.payoutUnits ?? '0') - BigInt(p.costUnits);
@@ -71,7 +88,12 @@ export function LeftRail({
 export function RightRail({ streak }: { streak: number }) {
   const [rows, setRows] = useState<Array<{ userId: string; name: string | null; isBot: boolean; pnlUnits: string; streak: number }> | null>(null);
   const [you, setYou] = useState<string | null>(null);
-  const [best, setBest] = useState(0);
+  const [stats, setStats] = useState<{
+    calls: number;
+    wins: number;
+    netPnlUnits: string;
+    streak: { current: number; best: number };
+  } | null>(null);
 
   useEffect(() => {
     const load = () => {
@@ -79,7 +101,7 @@ export function RightRail({ streak }: { streak: number }) {
         setRows(res.rows?.slice(0, 9) ?? null);
         setYou(res.you);
       }).catch(() => {});
-      api.profile().then((p) => setBest(p.stats?.streak.best ?? 0)).catch(() => {});
+      api.profile().then((p) => setStats(p.stats ?? null)).catch(() => {});
     };
     load();
     const t = setInterval(load, 20_000);
@@ -87,26 +109,56 @@ export function RightRail({ streak }: { streak: number }) {
   }, []);
 
   return (
-    <aside className="hidden flex-col gap-3 lg:flex">
-      <h2 className="px-1 text-[10px] font-black tracking-[0.14em] text-muted">YOUR STREAK</h2>
-      <div className="rounded-2xl border border-line bg-card p-4">
-        {streak > 0 ? (
-          <div className="flex items-center gap-3">
-            <StreakFlame streak={streak} size={26} />
-            <div className="text-[12px] font-extrabold text-muted">
-              best ×{Math.max(best, streak)} — keep it rolling
+    <aside className="hidden flex-col gap-3.5 lg:flex">
+      <RailTitle>YOUR STREAK</RailTitle>
+      <div className="rounded-[20px] border border-line p-4" style={cardStyle}>
+        <div className="flex items-center gap-3">
+          {streak > 0 ? (
+            <StreakFlame streak={streak} size={36} />
+          ) : (
+            <span className="opacity-30 saturate-0">
+              <StreakFlame streak={1} size={36} showCount={false} animate={false} />
+            </span>
+          )}
+          <div className="min-w-0 flex-1">
+            <div className="font-display text-[18px] text-ink">
+              {streak > 0 ? `WIN STREAK ×${streak}` : 'NO STREAK YET'}
+            </div>
+            <div className="text-[11px] font-black text-muted">
+              {streak > 0
+                ? `best ×${Math.max(stats?.streak.best ?? 0, streak)} — keep it rolling`
+                : 'win a call to ignite the flame'}
             </div>
           </div>
-        ) : (
-          <div>
-            <div className="font-display text-[15px] text-muted">NO STREAK YET</div>
-            <div className="text-[11px] font-bold text-muted">win a call to ignite the flame</div>
-          </div>
-        )}
+        </div>
+        <div className="my-3 h-[7px] overflow-hidden rounded-full bg-white/[0.07]">
+          <div
+            className="h-full rounded-full"
+            style={{
+              width: `${Math.min((streak / Math.max(stats?.streak.best ?? streak, 1)) * 100, 100)}%`,
+              background: 'linear-gradient(90deg, var(--gold), #FF8A1E)',
+              transition: 'width 0.4s ease',
+            }}
+          />
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          {[
+            ['WIN RATE', stats && stats.calls > 0 ? `${Math.round((stats.wins / stats.calls) * 100)}%` : '0%', stats && stats.calls > 0 && stats.wins / stats.calls >= 0.5 ? 'var(--up)' : 'var(--text)'],
+            ['CALLS', String(stats?.calls ?? 0), 'var(--text)'],
+            ['NET P&L', `${Number(BigInt(stats?.netPnlUnits ?? '0')) >= 0 ? '+' : ''}${fmtDusdcUnits(stats?.netPnlUnits ?? '0')}`, Number(BigInt(stats?.netPnlUnits ?? '0')) >= 0 ? 'var(--up)' : 'var(--down)'],
+          ].map(([label, value, color]) => (
+            <div key={label} className="rounded-[11px] border border-line bg-white/[0.04] px-2 py-1.5">
+              <div className="text-[8.5px] font-black tracking-[0.1em] text-muted">{label}</div>
+              <div className="num font-display text-[16px]" style={{ color }}>
+                {value}
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
-      <h2 className="mt-2 px-1 text-[10px] font-black tracking-[0.14em] text-muted">THIS WEEK&apos;S BOARD</h2>
-      <div className="flex-1 overflow-y-auto rounded-2xl border border-line bg-card p-2">
+      <RailTitle>THIS WEEK&apos;S BOARD</RailTitle>
+      <div className="flex-1 overflow-y-auto rounded-[20px] border border-line p-1.5" style={cardStyle}>
         {!rows || rows.length === 0 ? (
           <div className="py-5 text-center text-[11px] font-bold text-muted">
             No settled calls yet this week
