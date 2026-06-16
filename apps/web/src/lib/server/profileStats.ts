@@ -4,7 +4,12 @@ import type { Position } from '@callit/core';
 export function deriveStatsFromPositions(positions: Position[]): ProfileStats {
   const closed = positions
     .filter((p) => p.status !== 'open')
-    .sort((a, b) => (a.settledAt ?? a.placedAt) - (b.settledAt ?? b.placedAt));
+    .sort((a, b) => {
+      const ta = a.settledAt ?? a.placedAt;
+      const tb = b.settledAt ?? b.placedAt;
+      if (ta !== tb) return ta - tb;
+      return a.placedAt - b.placedAt;
+    });
 
   let streak = { current: 0, best: 0 };
   let netPnl = 0n;
