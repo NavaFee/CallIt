@@ -50,6 +50,10 @@ export function saveSession(session: Session): void {
   });
 }
 
+export function clearSession(): void {
+  cookies().delete(SESSION_COOKIE);
+}
+
 export function sessionKeypair(session: Session): Ed25519Keypair {
   return Ed25519Keypair.fromSecretKey(decodeSuiPrivateKey(session.sk).secretKey);
 }
@@ -80,7 +84,7 @@ function reserveUnits(): bigint {
  */
 export async function registerSession(): Promise<RegistrationResult> {
   const existing = getSession();
-  if (existing) {
+  if (existing && (MOCK_FUNDS || existing.managerId)) {
     return {
       session: existing,
       airdroppedUnits: 0n,

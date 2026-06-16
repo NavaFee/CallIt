@@ -35,7 +35,7 @@ export function LeftRail({
   const open = positions.filter((p) => p.status === 'open');
   const closed = positions.filter((p) => p.status !== 'open').slice(0, 12);
   return (
-    <aside className="hidden min-h-0 flex-col gap-3.5 lg:flex lg:h-full">
+    <aside className="hidden min-h-0 flex-col gap-3.5 lg:flex lg:h-full overflow-y-auto pb-4 [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: 'none' }}>
       <div className="shrink-0">
         <RailTitle>OPEN CALLS</RailTitle>
         {open.length === 0 ? (
@@ -52,9 +52,9 @@ export function LeftRail({
         )}
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex flex-col">
         <RailTitle>SETTLEMENTS</RailTitle>
-        <div className="min-h-0 flex-1 overflow-y-auto rounded-[20px] border border-line p-1" style={cardStyle}>
+        <div className="rounded-[20px] border border-line p-1 min-h-[300px]" style={cardStyle}>
           {closed.length === 0 ? (
             <div className="px-3 py-5 text-center text-[12px] font-extrabold text-muted">
               Settled calls land here automatically.
@@ -125,18 +125,20 @@ export function RightRail({ streak }: { streak: number }) {
     : null;
 
   return (
-    <aside className="hidden min-h-0 flex-col gap-3.5 lg:flex lg:h-full">
+    <aside className="hidden min-h-0 flex-col gap-3.5 lg:flex lg:h-full overflow-y-auto pb-4 [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: 'none' }}>
       <div className="shrink-0">
         <RailTitle>YOUR STREAK</RailTitle>
         <div className="rounded-[20px] border border-line p-4" style={cardStyle}>
           <div className="flex items-center gap-3">
-            {streak > 0 ? (
-              <StreakFlame streak={streak} size={36} />
-            ) : (
-              <span className="opacity-30 saturate-0">
-                <StreakFlame streak={1} size={36} showCount={false} animate={false} />
-              </span>
-            )}
+            <div className="-ml-3 mr-3 shrink-0 flex items-center">
+              {streak > 0 ? (
+                <StreakFlame streak={streak} size={36} />
+              ) : (
+                <span className="opacity-30 saturate-0">
+                  <StreakFlame streak={1} size={36} showCount={false} animate={false} />
+                </span>
+              )}
+            </div>
             <div className="min-w-0 flex-1">
               <div className="font-display text-[18px] text-ink">
                 {streak > 0 ? `WIN STREAK ×${streak}` : 'NO STREAK YET'}
@@ -175,9 +177,9 @@ export function RightRail({ streak }: { streak: number }) {
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex flex-col">
         <RailTitle>THIS WEEK&apos;S BOARD</RailTitle>
-        <div className="min-h-0 flex-1 overflow-y-auto rounded-[20px] border border-line p-1.5" style={cardStyle}>
+        <div className="rounded-[20px] border border-line p-1.5 min-h-[300px]" style={cardStyle}>
           {!boardRows || boardRows.length === 0 ? (
             <div className="py-5 text-center text-[11px] font-bold text-muted">
               No settled calls yet this week

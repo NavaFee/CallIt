@@ -866,9 +866,15 @@ export function PlayScreen() {
             </div>
           </div>
         ) : picked == null ? (
-          <div className="flex flex-col gap-3 lg:grid lg:min-h-[176px] lg:grid-cols-[176px_minmax(0,1fr)] lg:items-center lg:gap-5 xl:grid-cols-[190px_minmax(0,1fr)]">
-            <div className="flex flex-col gap-2 lg:justify-center lg:self-center">
-              <div className="hidden text-[10px] font-black tracking-[0.12em] text-muted lg:block">ORACLE EXPIRY</div>
+          <div className="flex flex-col gap-5">
+            {/* Expiry line */}
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[10.5px] font-black tracking-[0.12em] text-muted">ORACLE EXPIRY</span>
+                <span className="hidden lg:inline text-[10.5px] font-extrabold text-muted">
+                  odds refresh off the live vol surface
+                </span>
+              </div>
               {market ? (
                 <ExpiryChips oracles={market.oracles} selected={selectedId} onSelect={setSelectedId} />
               ) : (
@@ -886,12 +892,11 @@ export function PlayScreen() {
                   <div className="mt-1 text-[11px] font-bold text-muted">{marketDetail}</div>
                 </div>
               )}
-              <div className="hidden text-center text-[10px] font-extrabold text-muted lg:block">
-                odds refresh off the live vol surface
-              </div>
             </div>
-            <div className="flex flex-col gap-2.5 lg:mx-auto lg:w-full lg:max-w-[720px] lg:justify-center">
-              <div className="flex gap-3 lg:justify-center">
+
+            {/* Bet buttons line */}
+            <div className="flex flex-col gap-3">
+              <div className="flex gap-3">
                 {(['up', 'down'] as const).map((side) => {
                   const q = quote?.[side];
                   return (
@@ -901,7 +906,7 @@ export function PlayScreen() {
                       edgeH={8}
                       disabled={!!fuse || !q || !session}
                       onClick={() => setPicked(side)}
-                      className="h-[108px] flex-1 flex-col gap-0.5 rounded-[22px] lg:max-w-[320px] xl:h-[124px]"
+                      className="h-[108px] flex-1 flex-col gap-0.5 rounded-[22px] lg:max-w-none xl:h-[124px]"
                       data-testid={`call-${side}`}
                     >
                       <span className="font-display text-[34px] leading-none">{side === 'up' ? '▲' : '▼'}</span>

@@ -25,8 +25,12 @@ export function StreakFlame({
   const tier = streak >= 7 ? 3 : streak >= 5 ? 2 : streak >= 3 ? 1 : 0;
   const [core, outer] = TIER_CORES[tier]!;
   return (
-    <span className="inline-flex items-center gap-1" data-testid="streak-flame">
-      <span className="relative inline-block" style={{ width: size, height: size * 1.2 }}>
+    <span
+      className="inline-flex items-center"
+      style={{ gap: Math.max(6, size * 0.35) }}
+      data-testid="streak-flame"
+    >
+      <span className="relative inline-block" style={{ width: size * 1.2, height: size * 1.2 }}>
         <span
           className="absolute bottom-0 left-1/2 -translate-x-1/2"
           style={{

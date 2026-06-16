@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { MOCK_FUNDS } from '@/lib/server/clients';
-import { getSession, registerSession } from '@/lib/server/session';
+import { getSession, registerSession, clearSession } from '@/lib/server/session';
 import { tgLinkState, tgWidgetConfig } from '@/lib/server/tgState';
 import { tradingPortFor } from '@/lib/server/trading';
 
@@ -20,15 +20,28 @@ function publicSession(session: { address: string; managerId: string | null; cre
 export async function GET() {
   const session = getSession();
   if (!session) return NextResponse.json({ session: null, tgWidget: tgWidgetConfig() });
-  const port = tradingPortFor(session);
-  const balanceUnits = await port.getBalance().catch(() => 0n);
-  const tg = await tgLinkState(session);
-  return NextResponse.json({
-    session: publicSession(session),
-    balanceUnits: balanceUnits.toString(),
-    tgWidget: tgWidgetConfig(),
-    tgLinked: tg.linked,
-  });
+
+  // 如果处于真实钱包模式，但是 session 缺少 managerId，这说明它是一个过时的、无法使用的 stale session
+  if (!MOCK_FUNDS && !session.managerId) {
+    clearSession();
+    return NextResponse.json({ session: null, tgWidget: tgWidgetConfig() });
+  }
+
+  try {
+    const port = tradingPortFor(session);
+    const balanceUnits = await port.getBalance().catch(() => 0n);
+    const tg = await tgLinkState(session);
+    return NextResponse.json({
+      session: publicSession(session),
+      balanceUnits: balanceUnits.toString(),
+      tgWidget: tgWidgetConfig(),
+      tgLinked: tg.linked,
+    });
+  } catch (err) {
+    console.error('GET /api/session error:', err);
+    clearSession();
+    return NextResponse.json({ session: null, tgWidget: tgWidgetConfig() });
+  }
 }
 
 /** Register: session wallet → sponsored manager → welcome airdrop. Idempotent. */
